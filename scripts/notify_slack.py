@@ -36,7 +36,7 @@ def notify_slack(content: str, post_type: str, title: str = "投稿草稿") -> N
             {
                 "type": "context",
                 "elements": [
-                    {"type": "mrkdwn", "text": "👆 X / noteにコピペして投稿してください"}
+                    {"type": "mrkdwn", "text": "👆 X / noteにコピペして投稿してください\n⚡ 投稿後30分以内にリプライ返信を確認してください（X特に重要：返信は最大のエンゲージメントシグナルです）"}
                 ],
             },
         ]

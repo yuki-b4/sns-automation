@@ -6,6 +6,7 @@ Claude APIで分析して競合分析DBに記録する
 """
 
 import os
+import json
 import datetime
 import requests
 import anthropic
@@ -13,6 +14,12 @@ from sheets import get_competitor_accounts, append_competitor_record
 
 THREADS_TOKEN = os.environ.get("THREADS_TOKEN", "")
 BASE_THREADS_URL = "https://graph.threads.net/v1.0"
+STRATEGY_PATH = os.path.join(os.path.dirname(__file__), "../config/strategy.json")
+
+
+def load_strategy() -> dict:
+    with open(STRATEGY_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
 def fetch_competitor_posts(account_id: str) -> list[dict]:
@@ -35,7 +42,7 @@ def fetch_competitor_posts(account_id: str) -> list[dict]:
     return data["data"]
 
 
-def analyze_competitor_with_claude(account_id: str, posts: list[dict]) -> dict:
+def analyze_competitor_with_claude(account_id: str, posts: list[dict], strategy: dict) -> dict:
     """Claude APIで競合投稿を分析"""
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
@@ -45,6 +52,10 @@ def analyze_competitor_with_claude(account_id: str, posts: list[dict]) -> dict:
         f"返信:{p.get('reply_count', 0)} 表示:{p.get('views', 0)}）"
         for i, p in enumerate(posts[:10])
     ])
+
+    positioning = strategy["positioning"]
+    own_position = f"{positioning['position']} / {positioning['differentiation']}"
+    own_tagline = positioning["tagline"]
 
     prompt = f"""以下は競合SNSアカウント（{account_id}）の直近投稿です。
 
@@ -56,7 +67,7 @@ def analyze_competitor_with_claude(account_id: str, posts: list[dict]) -> dict:
   "top_posts": "最も高エンゲージメントの投稿3件の要約",
   "avg_engagement_rate": 平均エンゲージメント率（数値）,
   "dominant_themes": "頻出テーマ・キーワード（カンマ区切り）",
-  "positioning_gap": "ポジション「ハイパフォーマーのための、コンディション設計の専門家 / 意思力に頼らないパフォーマンス設計」との差分・空白地帯"
+  "positioning_gap": "自社ポジション「{own_position}」（想起ワード：{own_tagline}）との差分・空白地帯"
 }}
 
 JSONのみ出力してください。"""
@@ -83,6 +94,7 @@ JSONのみ出力してください。"""
 
 def main():
     now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).isoformat()
+    strategy = load_strategy()
     competitor_accounts = get_competitor_accounts()
 
     if not competitor_accounts:
@@ -95,7 +107,7 @@ def main():
         if not posts:
             continue
 
-        analysis = analyze_competitor_with_claude(account_id, posts)
+        analysis = analyze_competitor_with_claude(account_id, posts, strategy)
         record = {
             "competitor_id": account_id,
             "platform": "threads",

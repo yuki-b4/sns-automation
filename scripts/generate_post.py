@@ -28,9 +28,9 @@ def determine_post_type(strategy: dict) -> str:
     rotation = strategy["post_rotation"]
     # 今日が何日目かでローテーション位置を決定
     day_of_year = datetime.date.today().timetuple().tm_yday
-    # 1日5投稿 × ローテーション長で循環
-    slot = int(os.environ.get("POST_SLOT", "0"))  # 0〜4（時刻ごとに異なるワークフローから渡される）
-    index = ((day_of_year - 1) * 5 + slot) % len(rotation)
+    # 1日6投稿 × ローテーション長で循環
+    slot = int(os.environ.get("POST_SLOT", "0"))  # 0〜5（時刻ごとに異なるワークフローから渡される）
+    index = ((day_of_year - 1) * 6 + slot) % len(rotation)
     return rotation[index]
 
 
@@ -40,12 +40,14 @@ def build_prompt(strategy: dict, post_type: str) -> str:
     persona = strategy["persona"]
 
     return f"""あなたはSNSコンテンツライターです。
-以下の戦略に基づいて、日本語のSNS投稿文を1つ生成してください。
+以下の戦略に基づいて、日本語のThreads投稿文と補足セルフリプライを生成してください。
 
 【ポジショニング】
 - ポジション：{positioning["position"]}
 - コンセプト：{positioning["concept"]}
 - 差別化軸：{positioning["differentiation"]}
+- 想起ワード：{positioning["tagline"]}
+- ステートメント：{positioning["statement"]}
 
 【ターゲット】
 {persona["description"]}
@@ -55,17 +57,24 @@ def build_prompt(strategy: dict, post_type: str) -> str:
 {post_info["label"]}（{post_info["description"]}）
 
 【ルール】
-- 文字数：140〜200文字程度（X向け）
+- 本文：100〜180文字程度（Threadsのカジュアル・会話的なトーンで）
 - 語尾は断定的・力強く
-- ハッシュタグは不要
 - 冒頭で目を引くフックを入れる
 - 具体的な行動や言葉を使う
+- 自慢に見える表現は避け、共感・学び・プロセスとして語る
 - 「ハイパフォーマー」「プロフェッショナル」「コンサル」「PM」「医師」「弁護士」など職種は適宜使ってよい
+- 補足リプライ：30〜60文字の追加情報・問いかけ・CTAのいずれか（本文の続きや深掘りとなる内容）
 
-投稿文のみを出力してください。説明や前置きは不要です。"""
+以下の形式で出力してください（他の説明・前置き不要）：
+
+【本文】
+（ここに本文）
+
+【補足リプライ】
+（ここに補足リプライ）"""
 
 
-def generate_post(post_type: str, strategy: dict) -> str:
+def generate_post(post_type: str, strategy: dict) -> dict:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     prompt = build_prompt(strategy, post_type)
 
@@ -74,7 +83,24 @@ def generate_post(post_type: str, strategy: dict) -> str:
         max_tokens=512,
         messages=[{"role": "user", "content": prompt}],
     )
-    return message.content[0].text.strip()
+    raw = message.content[0].text.strip()
+
+    # 本文と補足リプライをパース
+    content = ""
+    self_reply = ""
+    if "【本文】" in raw and "【補足リプライ】" in raw:
+        parts = raw.split("【補足リプライ】")
+        content = parts[0].replace("【本文】", "").strip()
+        self_reply = parts[1].strip()
+    else:
+        content = raw
+
+    # トピックタグを本文末尾に付記
+    topic_tag = strategy["post_types"][post_type].get("topic_tag", "")
+    if topic_tag and topic_tag not in content:
+        content = f"{content}\n\n{topic_tag}"
+
+    return {"content": content, "self_reply": self_reply}
 
 
 def main():
@@ -83,14 +109,24 @@ def main():
 
     strategy = load_strategy()
     post_type = determine_post_type(strategy)
-    content = generate_post(post_type, strategy)
+    result = generate_post(post_type, strategy)
+    content = result["content"]
+    self_reply = result["self_reply"]
 
     print(f"[生成完了] タイプ: {post_type}")
     print(f"[本文]\n{content}\n")
+    if self_reply:
+        print(f"[補足リプライ]\n{self_reply}\n")
 
     # Threads へ自動投稿
     threads_id = post_to_threads(content)
     # linkedin_id = post_to_linkedin(content)  # LinkedIn 一時無効化
+
+    # セルフリプライ投稿（投稿成功かつ補足リプライがある場合）
+    if threads_id and self_reply:
+        reply_id = post_to_threads(self_reply, reply_to_id=threads_id)
+        if reply_id:
+            print(f"[Threads] セルフリプライ投稿成功: {reply_id}")
 
     # X・note 草稿をSlack通知
     notify_slack(content, post_type)

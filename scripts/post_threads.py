@@ -12,18 +12,21 @@ THREADS_TOKEN = os.environ.get("THREADS_TOKEN", "")
 BASE_URL = "https://graph.threads.net/v1.0"
 
 
-def post_to_threads(content: str) -> str | None:
+def post_to_threads(content: str, reply_to_id: str | None = None) -> str | None:
     if not THREADS_TOKEN or not THREADS_USER_ID:
         print("[Threads] トークンまたはユーザーIDが未設定のためスキップ")
         return None
 
     # Step 1: メディアコンテナ作成
     create_url = f"{BASE_URL}/{THREADS_USER_ID}/threads"
-    create_resp = requests.post(create_url, params={
+    params = {
         "media_type": "TEXT",
         "text": content,
         "access_token": THREADS_TOKEN,
-    })
+    }
+    if reply_to_id:
+        params["reply_to_id"] = reply_to_id
+    create_resp = requests.post(create_url, params=params)
     create_data = create_resp.json()
 
     if "id" not in create_data:

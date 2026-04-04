@@ -2,36 +2,55 @@
   "positioning": {
     "position": "ハイパフォーマーのための、コンディション設計の専門家",
     "concept": "スマートに勝ち続ける設計力",
-    "differentiation": "意思力に頼らないパフォーマンス設計"
+    "differentiation": "意思力に頼らないパフォーマンス設計",
+    "tagline": "ハイパフォーマンスを維持するためのコンディション設計ならこの人",
+    "statement": "私はコンサル・PM・医師・弁護士などのハイパフォーマーが結果のムラをなくして安定した成果を出し続けるのを、意思力に頼らないパフォーマンス設計で支援する。根性論・自己啓発とは異なり、行動設計・環境設計で再現性のあるコンディション管理を提供する。"
   },
   "post_types": {
     "permission": {
       "label": "許可系",
-      "ratio": 0.5,
-      "description": "共感・拡散・フォロー獲得。ハイパフォーマー全般に刺さる「やめていい」「頑張らなくていい」系の許可メッセージ"
+      "ratio": 0.4,
+      "description": "共感・拡散・フォロー獲得。ハイパフォーマー全般に刺さる「やめていい」「頑張らなくていい」系の許可メッセージ",
+      "topic_tag": "#メンタルケア"
     },
     "structure": {
       "label": "体系化系",
-      "ratio": 0.3,
-      "description": "権威性・信頼・法人リーチ。コンディション設計を構造化・言語化して伝える。設計思考で解くフォーマット"
+      "ratio": 0.25,
+      "description": "権威性・信頼・法人リーチ。コンディション設計を構造化・言語化して伝える。設計思考で解くフォーマット",
+      "topic_tag": "#生産性向上"
     },
     "personal": {
       "label": "自己開示系",
-      "ratio": 0.2,
-      "description": "許可系と体系化系の橋渡し・説得力。コーチング経験・自身の失敗談・エンジニア経験談"
+      "ratio": 0.15,
+      "description": "許可系と体系化系の橋渡し・説得力。コーチング経験・自身の失敗談・エンジニア経験談。プロセス公開（ビルド・イン・パブリック）を意識し、自慢ではなく共感・学びとして語る",
+      "topic_tag": "#自己成長"
+    },
+    "opinion": {
+      "label": "業界考察系",
+      "ratio": 0.1,
+      "description": "専門性・時事性の証明。ハイパフォーマー界隈のトレンド・ニュース・研究に対する独自の切り口での意見発信。「この人にしか語れない視点」を意識する",
+      "topic_tag": "#キャリア"
+    },
+    "dialogue": {
+      "label": "対話系",
+      "ratio": 0.1,
+      "description": "コミュニティ形成・エンゲージメント促進。質問・投票・読者の悩みへの問いかけ。リプライを自然に引き出す設計。エンゲージメントベイト（いいねしたら〇〇）は使わない",
+      "topic_tag": "#コミュニティ"
     }
   },
   "post_rotation": [
     "permission",
-    "permission",
-    "permission",
-    "structure",
     "structure",
     "personal",
     "permission",
+    "opinion",
+    "dialogue",
     "permission",
+    "structure",
+    "personal",
     "permission",
-    "structure"
+    "opinion",
+    "dialogue"
   ],
   "persona": {
     "name": "ミサキ・35歳",
