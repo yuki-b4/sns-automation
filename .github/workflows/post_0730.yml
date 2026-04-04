@@ -1,0 +1,27 @@
+name: Post 07:30 JST
+
+on:
+  schedule:
+    - cron: '30 22 * * *'  # UTC 22:30 = JST 07:30（翌日）
+  workflow_dispatch:
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: python scripts/generate_post.py
+        env:
+          POST_SLOT: '1'
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          THREADS_TOKEN: ${{ secrets.THREADS_TOKEN }}
+          # LINKEDIN_TOKEN: ${{ secrets.LINKEDIN_TOKEN }}  # LinkedIn 一時無効化
+          # LINKEDIN_ORG_ID: ${{ secrets.LINKEDIN_ORG_ID }}  # LinkedIn 一時無効化
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          GOOGLE_SHEETS_ID: ${{ secrets.GOOGLE_SHEETS_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}

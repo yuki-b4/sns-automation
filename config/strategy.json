@@ -1,0 +1,47 @@
+{
+  "positioning": {
+    "position": "ハイパフォーマーのための、コンディション設計の専門家",
+    "concept": "スマートに勝ち続ける設計力",
+    "differentiation": "意思力に頼らないパフォーマンス設計"
+  },
+  "post_types": {
+    "permission": {
+      "label": "許可系",
+      "ratio": 0.5,
+      "description": "共感・拡散・フォロー獲得。ハイパフォーマー全般に刺さる「やめていい」「頑張らなくていい」系の許可メッセージ"
+    },
+    "structure": {
+      "label": "体系化系",
+      "ratio": 0.3,
+      "description": "権威性・信頼・法人リーチ。コンディション設計を構造化・言語化して伝える。設計思考で解くフォーマット"
+    },
+    "personal": {
+      "label": "自己開示系",
+      "ratio": 0.2,
+      "description": "許可系と体系化系の橋渡し・説得力。コーチング経験・自身の失敗談・エンジニア経験談"
+    }
+  },
+  "post_rotation": [
+    "permission",
+    "permission",
+    "permission",
+    "structure",
+    "structure",
+    "personal",
+    "permission",
+    "permission",
+    "permission",
+    "structure"
+  ],
+  "persona": {
+    "name": "ミサキ・35歳",
+    "description": "高知的労働者全般（コンサル・PM・医師・弁護士・スタートアップ創業者など）",
+    "pain_points": [
+      "頑張り方を間違えてパフォーマンスが落ちている",
+      "結果のムラが怖い",
+      "自分だけ遅れている気がする",
+      "休むと罪悪感がある"
+    ],
+    "behavior": "インプット過多・自己管理を意志力で解決しようとする"
+  }
+}

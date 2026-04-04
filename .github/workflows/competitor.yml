@@ -1,0 +1,22 @@
+name: Competitor Analysis 08:00 JST (Tue & Fri)
+
+on:
+  schedule:
+    - cron: '0 23 * * 1,4'  # UTC 23:00 Mon/Thu = JST 08:00 Tue/Fri
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: python scripts/analyze_competitors.py
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          THREADS_TOKEN: ${{ secrets.THREADS_TOKEN }}
+          GOOGLE_SHEETS_ID: ${{ secrets.GOOGLE_SHEETS_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
