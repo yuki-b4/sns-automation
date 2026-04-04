@@ -43,15 +43,14 @@ def check_slack() -> None:
     if not webhook.startswith("https://hooks.slack.com/"):
         raise ValueError(f"[Preflight] SLACK_WEBHOOK の形式が不正です: {webhook[:40]}...")
 
-    # 空のペイロードで疎通確認（Slackは空bodyを無視するが200を返す）
+    # 疎通確認（Slackは空textを400で返すため最小テキストを送る）
     resp = requests.post(
         webhook,
-        data=json.dumps({"text": ""}),
+        data=json.dumps({"text": "[Preflight] Slack接続確認"}),
         headers={"Content-Type": "application/json"},
         timeout=10,
     )
 
-    # Slackは空textの場合 "no_text" を返すが接続自体は成功
     if resp.status_code != 200:
         raise ConnectionError(f"[Preflight] Slack接続エラー: HTTP {resp.status_code} {resp.text}")
 
