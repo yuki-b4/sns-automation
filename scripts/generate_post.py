@@ -9,6 +9,7 @@ import os
 import json
 import datetime
 import anthropic
+from preflight import run_all as preflight_check
 from post_threads import post_to_threads
 # from post_linkedin import post_to_linkedin  # LinkedIn 一時無効化
 from notify_slack import notify_slack
@@ -77,6 +78,9 @@ def generate_post(post_type: str, strategy: dict) -> str:
 
 
 def main():
+    # Claude API呼び出し前に外部サービスの接続確認
+    preflight_check()
+
     strategy = load_strategy()
     post_type = determine_post_type(strategy)
     content = generate_post(post_type, strategy)
