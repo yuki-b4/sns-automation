@@ -1,8 +1,8 @@
-name: Post 21:00 JST
+name: Post 18:05 JST
 
 on:
   schedule:
-    - cron: '0 12 * * *'  # UTC 12:00 = JST 21:00
+    - cron: '5 9 * * *'  # UTC 09:05 = JST 18:05
   workflow_dispatch:
 
 jobs:
@@ -16,7 +16,7 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python scripts/generate_post.py
         env:
-          POST_SLOT: '5'
+          POST_SLOT: '4'
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
           THREADS_TOKEN: ${{ secrets.THREADS_TOKEN }}
