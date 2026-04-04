@@ -95,11 +95,6 @@ def generate_post(post_type: str, strategy: dict) -> dict:
     else:
         content = raw
 
-    # トピックタグを本文末尾に付記
-    topic_tag = strategy["post_types"][post_type].get("topic_tag", "")
-    if topic_tag and topic_tag not in content:
-        content = f"{content}\n\n{topic_tag}"
-
     return {"content": content, "self_reply": self_reply}
 
 
