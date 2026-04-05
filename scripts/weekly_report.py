@@ -50,6 +50,27 @@ def summarize_own_data(weekly_data: dict) -> str:
     return "\n".join(lines)
 
 
+def extract_post_samples(weekly_data: dict, max_posts: int = 5) -> str:
+    """トンマナ分析用に直近投稿の本文サンプルを抽出"""
+    posts = weekly_data["posts"]
+    if not posts:
+        return "サンプルなし"
+
+    metrics_map = {m["post_id"]: m for m in weekly_data["metrics"]}
+    # ERが高い順に並べてサンプル取得
+    sorted_posts = sorted(
+        posts,
+        key=lambda p: float(metrics_map.get(p.get("post_id", ""), {}).get("engagement_rate", 0)),
+        reverse=True,
+    )
+    lines = []
+    for i, post in enumerate(sorted_posts[:max_posts], 1):
+        content = post.get("content", "").strip()
+        if content:
+            lines.append(f"投稿{i}（{post.get('post_type', '')}）:\n{content}")
+    return "\n\n".join(lines) if lines else "サンプルなし"
+
+
 def summarize_competitor_data(competitor_data: list[dict]) -> str:
     if not competitor_data:
         return "競合データなし"
@@ -65,7 +86,7 @@ def summarize_competitor_data(competitor_data: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def generate_report(strategy: dict, own_summary: str, competitor_summary: str) -> str:
+def generate_report(strategy: dict, own_summary: str, competitor_summary: str, post_samples: str = "") -> str:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     positioning = strategy["positioning"]
     post_types = strategy["post_types"]
@@ -74,6 +95,8 @@ def generate_report(strategy: dict, own_summary: str, competitor_summary: str) -
         f"- {v['label']}：{int(v['ratio'] * 100)}%"
         for v in post_types.values()
     ])
+
+    samples_section = f"\n【直近投稿サンプル（トンマナ分析用）】\n{post_samples}\n" if post_samples and post_samples != "サンプルなし" else ""
 
     prompt = f"""あなたはSNS戦略アドバイザーです。
 以下のデータを分析し、日本語で改善提案を出してください。
@@ -88,17 +111,18 @@ def generate_report(strategy: dict, own_summary: str, competitor_summary: str) -
 
 【過去7日間の自社データ】
 {own_summary}
-
+{samples_section}
 【競合データ（直近）】
 {competitor_summary}
 
 【出力形式】
-以下の4項目を番号付きで出力してください：
+以下の5項目を番号付きで出力してください：
 
 1. ポジショニング/差別化軸の調整案（自社データ+競合との差分に基づく）
 2. 投稿タイプ配分の調整案（許可系X%・体系化系X%・自己開示系X%で提示）
 3. 競合が取れていない空白地帯・先手で取るべきテーマ（上位3件）
-4. その他改善案（上位3件）"""
+4. 文章のトンマナ改善案（直近投稿サンプルを分析し、「AI生成らしさ・硬さ・パターン化」を具体的に指摘し、より人間らしく自然な表現にするための具体的な書き換え例を2〜3件示すこと）
+5. その他改善案（上位3件）"""
 
     message = client.messages.create(
         model="claude-opus-4-6",
@@ -115,12 +139,13 @@ def main():
 
     own_summary = summarize_own_data(weekly_data)
     competitor_summary = summarize_competitor_data(competitor_data)
+    post_samples = extract_post_samples(weekly_data)
 
     print("[週次レポート] データ収集完了")
     print(f"自社データ:\n{own_summary}\n")
     print(f"競合データ:\n{competitor_summary}\n")
 
-    report = generate_report(strategy, own_summary, competitor_summary)
+    report = generate_report(strategy, own_summary, competitor_summary, post_samples)
     print(f"[週次レポート] 生成完了:\n{report}")
 
     notify_slack_report(report, title="週次改善レポート")
