@@ -116,8 +116,11 @@ def get_weekly_data(weeks: int = 1) -> dict:
 
     import datetime
     cutoff = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))) - datetime.timedelta(weeks=weeks)
-    recent_posts = [p for p in posts if _is_recent(p.get("posted_at", ""), cutoff)]
-    post_ids = {_normalize_id(p["post_id"]) for p in recent_posts}
+    recent_posts = [
+        {**p, "post_id": _normalize_id(p["post_id"])}
+        for p in posts if _is_recent(p.get("posted_at", ""), cutoff)
+    ]
+    post_ids = {p["post_id"] for p in recent_posts}
     recent_metrics = [
         {**m, "post_id": _normalize_id(m["post_id"])}
         for m in metrics
