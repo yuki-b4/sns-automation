@@ -37,7 +37,7 @@ def append_post_record(record: dict) -> None:
         record.get("posted_at", ""),
         record.get("week_number", ""),
     ]
-    sheet.append_row(row)
+    sheet.append_row(row, value_input_option="RAW")
     print(f"[Sheets] 投稿DB記録: {record['platform']} / {record['post_id']}")
 
 
@@ -58,7 +58,7 @@ def append_metrics_record(record: dict) -> None:
         record.get("impressions", 0),
         record.get("engagement_rate", 0.0),
     ]
-    sheet.append_row(row)
+    sheet.append_row(row, value_input_option="RAW")
 
 
 def append_competitor_record(record: dict) -> None:
@@ -153,10 +153,12 @@ def get_competitor_accounts() -> list[str]:
 
 def _normalize_id(value) -> str:
     """Google Sheetsが科学表記に変換した数値IDを文字列に正規化する"""
+    from decimal import Decimal, InvalidOperation
+    s = str(value).strip()
     try:
-        return str(int(float(value)))
-    except (ValueError, TypeError):
-        return str(value)
+        return str(int(Decimal(s)))
+    except (InvalidOperation, ValueError):
+        return s
 
 
 def _is_recent(posted_at_str: str, cutoff) -> bool:
