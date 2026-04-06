@@ -1,7 +1,7 @@
 """
 投稿生成スクリプト
 Claude APIを使ってその日の投稿タイプに応じた草稿を生成し、
-ThreadsへAutomatic投稿、X/note草稿をSlack通知する
+ThreadsへAutomatic投稿、投稿内容をSlack通知する
 ※ LinkedIn は一時無効化中（post_linkedin.py は保持）
 """
 
@@ -34,16 +34,13 @@ def determine_post_type(strategy: dict) -> str:
     return rotation[index]
 
 
-def build_prompt(strategy: dict, post_type: str, platform: str = "threads") -> str:
+def build_prompt(strategy: dict, post_type: str) -> str:
     positioning = strategy["positioning"]
     post_info = strategy["post_types"][post_type]
     persona = strategy["persona"]
 
-    platform_label = "X（Twitter）" if platform == "x" else "Threads"
-    source_rule = "- 研究・論文・調査データ等を引用・参照する場合は、著者名や媒体名・発表年など出典を本文中に明示する（例：「〇〇大学の研究（2024）によると」「Nature誌掲載の研究では」など）\n" if platform == "x" else ""
-
     return f"""あなたはSNSコンテンツライターです。
-以下の戦略に基づいて、日本語の{platform_label}投稿文と補足セルフリプライを生成してください。
+以下の戦略に基づいて、日本語のThreads投稿文と補足セルフリプライを生成してください。
 
 【ポジショニング】
 - ポジション：{positioning["position"]}
@@ -60,13 +57,13 @@ def build_prompt(strategy: dict, post_type: str, platform: str = "threads") -> s
 {post_info["label"]}（{post_info["description"]}）
 
 【ルール】
-- 本文：100〜180文字程度（{platform_label}のカジュアル・会話的なトーンで）
+- 本文：100〜180文字程度（Threadsのカジュアル・会話的なトーンで）
 - 語尾は断定的・力強く
 - 冒頭で目を引くフックを入れる
 - 具体的な行動や言葉を使う
 - 自慢に見える表現は避け、共感・学び・プロセスとして語る
 - 「ハイパフォーマー」「プロフェッショナル」「コンサル」「PM」「医師」「弁護士」など職種は適宜使ってよい
-{source_rule}- 補足リプライ：30〜60文字の追加情報・問いかけ・CTAのいずれか（本文の続きや深掘りとなる内容）
+- 補足リプライ：30〜60文字の追加情報・問いかけ・CTAのいずれか（本文の続きや深掘りとなる内容）
 
 以下の形式で出力してください（他の説明・前置き不要）：
 
@@ -94,7 +91,7 @@ def generate_post(post_type: str, strategy: dict) -> dict:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
     # Threads用コンテンツ生成
-    threads_prompt = build_prompt(strategy, post_type, platform="threads")
+    threads_prompt = build_prompt(strategy, post_type)
     threads_message = client.messages.create(
         model="claude-opus-4-6",
         max_tokens=512,
@@ -102,20 +99,9 @@ def generate_post(post_type: str, strategy: dict) -> dict:
     )
     threads_result = _parse_post(threads_message.content[0].text.strip())
 
-    # X用コンテンツ生成（出典明示ルールを含む）
-    x_prompt = build_prompt(strategy, post_type, platform="x")
-    x_message = client.messages.create(
-        model="claude-opus-4-6",
-        max_tokens=512,
-        messages=[{"role": "user", "content": x_prompt}],
-    )
-    x_result = _parse_post(x_message.content[0].text.strip())
-
     return {
         "content": threads_result["content"],
         "self_reply": threads_result["self_reply"],
-        "x_content": x_result["content"],
-        "x_self_reply": x_result["self_reply"],
     }
 
 
@@ -128,16 +114,11 @@ def main():
     result = generate_post(post_type, strategy)
     content = result["content"]
     self_reply = result["self_reply"]
-    x_content = result["x_content"]
-    x_self_reply = result["x_self_reply"]
 
     print(f"[生成完了] タイプ: {post_type}")
     print(f"[Threads本文]\n{content}\n")
     if self_reply:
         print(f"[Threads補足リプライ]\n{self_reply}\n")
-    print(f"[X本文]\n{x_content}\n")
-    if x_self_reply:
-        print(f"[X補足リプライ]\n{x_self_reply}\n")
 
     # Threads へ自動投稿
     threads_id = post_to_threads(content)
@@ -149,11 +130,11 @@ def main():
         if reply_id:
             print(f"[Threads] セルフリプライ投稿成功: {reply_id}")
 
-    # X・note 草稿をSlack通知（X用コンテンツを使用）
-    x_slack_content = x_content
-    if x_self_reply:
-        x_slack_content += f"\n\n↩️ リプライ案：{x_self_reply}"
-    notify_slack(x_slack_content, post_type)
+    # Threadsへの投稿内容をSlack通知
+    slack_content = content
+    if self_reply:
+        slack_content += f"\n\n↩️ セルフリプライ：{self_reply}"
+    notify_slack(slack_content, post_type)
 
     # 投稿DBに記録
     now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))

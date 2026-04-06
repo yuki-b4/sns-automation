@@ -1,6 +1,6 @@
 """
 Slack通知モジュール
-X・note用の投稿草稿をSlack Incoming Webhookで通知する
+Threadsへの投稿内容をSlack Incoming Webhookで通知する
 """
 
 import os
@@ -14,10 +14,12 @@ POST_TYPE_LABELS = {
     "permission": "許可系",
     "structure": "体系化系",
     "personal": "自己開示系",
+    "opinion": "業界考察系",
+    "dialogue": "対話系",
 }
 
 
-def notify_slack(content: str, post_type: str, title: str = "投稿草稿") -> None:
+def notify_slack(content: str, post_type: str, title: str = "Threads投稿完了") -> None:
     if not SLACK_WEBHOOK:
         print("[Slack] WebhookURLが未設定のためスキップ")
         return
@@ -27,7 +29,7 @@ def notify_slack(content: str, post_type: str, title: str = "投稿草稿") -> N
         "blocks": [
             {
                 "type": "header",
-                "text": {"type": "plain_text", "text": f"📝 {title}（{label}）"},
+                "text": {"type": "plain_text", "text": f"✅ {title}（{label}）"},
             },
             {
                 "type": "section",
@@ -36,7 +38,7 @@ def notify_slack(content: str, post_type: str, title: str = "投稿草稿") -> N
             {
                 "type": "context",
                 "elements": [
-                    {"type": "mrkdwn", "text": "👆 X / noteにコピペして投稿してください\n⚡ 投稿後30分以内にリプライ返信を確認してください（X特に重要：返信は最大のエンゲージメントシグナルです）"}
+                    {"type": "mrkdwn", "text": "⚡ 投稿後30分以内にリプライ返信を確認してください（返信は最大のエンゲージメントシグナルです）"}
                 ],
             },
         ]
