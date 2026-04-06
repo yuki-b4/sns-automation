@@ -1,8 +1,6 @@
 name: Competitor Analysis 08:00 JST (Tue & Fri)
 
 on:
-  schedule:
-    - cron: '0 23 * * 1,4'  # UTC 23:00 Mon/Thu = JST 08:00 Tue/Fri
   workflow_dispatch:
 
 jobs:
