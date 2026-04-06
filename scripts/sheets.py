@@ -98,7 +98,7 @@ def get_recent_post_ids(days: int = 2) -> list[dict]:
             try:
                 posted_at = datetime.datetime.fromisoformat(r["posted_at"])
                 if posted_at >= cutoff:
-                    result.append({"post_id": r["post_id"], "platform": r["platform"]})
+                    result.append({"post_id": _normalize_id(r["post_id"]), "platform": r["platform"]})
             except Exception:
                 pass
     return result
@@ -117,8 +117,12 @@ def get_weekly_data(weeks: int = 1) -> dict:
     import datetime
     cutoff = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))) - datetime.timedelta(weeks=weeks)
     recent_posts = [p for p in posts if _is_recent(p.get("posted_at", ""), cutoff)]
-    post_ids = {p["post_id"] for p in recent_posts}
-    recent_metrics = [m for m in metrics if m.get("post_id") in post_ids]
+    post_ids = {_normalize_id(p["post_id"]) for p in recent_posts}
+    recent_metrics = [
+        {**m, "post_id": _normalize_id(m["post_id"])}
+        for m in metrics
+        if _normalize_id(m.get("post_id", "")) in post_ids
+    ]
 
     return {"posts": recent_posts, "metrics": recent_metrics}
 
@@ -145,6 +149,14 @@ def get_competitor_accounts() -> list[str]:
         return [r["account_id"] for r in records if r.get("account_id")]
     except Exception:
         return []
+
+
+def _normalize_id(value) -> str:
+    """Google Sheetsが科学表記に変換した数値IDを文字列に正規化する"""
+    try:
+        return str(int(float(value)))
+    except (ValueError, TypeError):
+        return str(value)
 
 
 def _is_recent(posted_at_str: str, cutoff) -> bool:
