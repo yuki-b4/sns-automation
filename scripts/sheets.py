@@ -37,7 +37,7 @@ def append_post_record(record: dict) -> None:
         record.get("posted_at", ""),
         record.get("week_number", ""),
     ]
-    sheet.append_row(row)
+    sheet.append_row(row, value_input_option="RAW")
     print(f"[Sheets] 投稿DB記録: {record['platform']} / {record['post_id']}")
 
 
@@ -58,7 +58,7 @@ def append_metrics_record(record: dict) -> None:
         record.get("impressions", 0),
         record.get("engagement_rate", 0.0),
     ]
-    sheet.append_row(row)
+    sheet.append_row(row, value_input_option="RAW")
 
 
 def append_competitor_record(record: dict) -> None:
