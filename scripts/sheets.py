@@ -118,17 +118,16 @@ def get_recent_competitor_posts(days: int = 14, unanalyzed_only: bool = False) -
     sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("競合投稿DB")
     records = sheet.get_all_records()
 
-    cutoff = datetime.datetime.now(
-        datetime.timezone(datetime.timedelta(hours=9))
-    ) - datetime.timedelta(days=days)
-
     result = []
-    for i, r in enumerate(records):
-        if unanalyzed_only:
-            if str(r.get("analyzed", "")).strip().upper() == "TRUE":
-                continue
-            result.append({**r, "_row": i + 2})  # ヘッダー行分 +1、さらに1始まりで +1
-        else:
+    if unanalyzed_only:
+        for i, r in enumerate(records):
+            if str(r.get("analyzed", "")).strip().upper() != "TRUE":
+                result.append({**r, "_row": i + 2})  # ヘッダー行分 +1、さらに1始まりで +1
+    else:
+        cutoff = datetime.datetime.now(
+            datetime.timezone(datetime.timedelta(hours=9))
+        ) - datetime.timedelta(days=days)
+        for r in records:
             if _is_recent(r.get("posted_at", ""), cutoff):
                 result.append(r)
     return result
@@ -207,19 +206,6 @@ def get_recent_competitor_data() -> list[dict]:
     sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("競合分析DB")
     return sheet.get_all_records()
 
-
-def get_competitor_accounts() -> list[str]:
-    """競合分析DB Sheetから競合アカウントIDリストを取得"""
-    if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
-        return []
-
-    client = get_client()
-    try:
-        sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("競合アカウント")
-        records = sheet.get_all_records()
-        return [r["account_id"] for r in records if r.get("account_id")]
-    except Exception:
-        return []
 
 
 def _normalize_id(value) -> str:
