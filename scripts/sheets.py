@@ -61,11 +61,14 @@ def upsert_metrics_record(record: dict) -> None:
 
     existing = sheet.get_all_records()
     normalized_id = _normalize_id(str(record.get("post_id", "")))
+    target_row = None
     for i, r in enumerate(existing):
         if _normalize_id(str(r.get("post_id", ""))) == normalized_id:
-            row_num = i + 2  # 1-indexed + ヘッダー行
-            sheet.update(range_name=f"A{row_num}:G{row_num}", values=[row])
-            return
+            target_row = i + 2  # 1-indexed + ヘッダー行（最後の一致行で上書き）
+
+    if target_row is not None:
+        sheet.update(range_name=f"A{target_row}:G{target_row}", values=[row])
+        return
 
     sheet.append_row(row, value_input_option="RAW")
 
