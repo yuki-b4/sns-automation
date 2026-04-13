@@ -11,6 +11,7 @@ import datetime
 import anthropic
 from sheets import get_recent_competitor_posts, append_competitor_record
 
+
 STRATEGY_PATH = os.path.join(os.path.dirname(__file__), "../config/strategy.json")
 
 
@@ -19,7 +20,7 @@ def load_strategy() -> dict:
         return json.load(f)
 
 
-def analyze_with_claude(account_id: str, posts: list[dict], strategy: dict) -> dict:
+def analyze_with_claude(posts: list[dict], strategy: dict) -> dict:
     """Claude API で競合投稿を集計分析し、サマリーを返す"""
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
@@ -36,12 +37,12 @@ def analyze_with_claude(account_id: str, posts: list[dict], strategy: dict) -> d
     ])
 
     if not posts_text:
-        print(f"[競合分析] {account_id}: 本文のある投稿がないためスキップ")
+        print("[競合分析] 本文のある投稿がないためスキップ")
         return {}
 
     positioning = strategy.get("positioning", {})
 
-    prompt = f"""あなたはSNS戦略アナリストです。以下の競合アカウントの投稿を分析し、日本語で回答してください。
+    prompt = f"""あなたはSNS戦略アナリストです。以下の競合投稿を分析し、日本語で回答してください。
 
 【自社ポジション】
 - ポジション：{positioning.get("position", "")}
@@ -75,7 +76,7 @@ JSON形式のみで出力してください（前後の説明文は不要）：
     try:
         return json.loads(raw)
     except Exception as e:
-        print(f"[競合分析] Claude分析のJSON解析失敗 ({account_id}): {e}")
+        print(f"[競合分析] Claude分析のJSON解析失敗: {e}")
         return {
             "top_posts": raw[:200],
             "avg_engagement_rate": 0.0,
@@ -95,31 +96,23 @@ def main():
         print("[競合分析] 競合投稿DBにデータがありません。「競合投稿DB」シートに手動入力してください。")
         return
 
-    # competitor_id ごとにグループ化
-    groups: dict[str, list[dict]] = {}
-    for p in posts:
-        cid = str(p.get("competitor_id", ""))
-        if cid:
-            groups.setdefault(cid, []).append(p)
-
-    print(f"[競合分析] 対象アカウント: {len(groups)}件 / 投稿数: {len(posts)}件")
+    print(f"[競合分析] 投稿数: {len(posts)}件")
     strategy = load_strategy()
 
-    for account_id, account_posts in groups.items():
-        analysis = analyze_with_claude(account_id, account_posts, strategy)
-        if not analysis:
-            continue
+    analysis = analyze_with_claude(posts, strategy)
+    if not analysis:
+        return
 
-        append_competitor_record({
-            "competitor_id": account_id,
-            "platform": "threads",
-            "top_posts": analysis.get("top_posts", ""),
-            "avg_engagement_rate": analysis.get("avg_engagement_rate", 0.0),
-            "dominant_themes": analysis.get("dominant_themes", ""),
-            "positioning_gap": analysis.get("positioning_gap", ""),
-            "collected_at": now,
-        })
-        print(f"[競合分析] {account_id}: 集計分析を競合分析DBに記録しました")
+    append_competitor_record({
+        "competitor_id": "",
+        "platform": "threads",
+        "top_posts": analysis.get("top_posts", ""),
+        "avg_engagement_rate": analysis.get("avg_engagement_rate", 0.0),
+        "dominant_themes": analysis.get("dominant_themes", ""),
+        "positioning_gap": analysis.get("positioning_gap", ""),
+        "collected_at": now,
+    })
+    print("[競合分析] 集計分析を競合分析DBに記録しました")
 
 
 if __name__ == "__main__":

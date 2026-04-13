@@ -106,8 +106,7 @@ def append_competitor_record(record: dict) -> None:
 
 def append_competitor_posts(records: list[dict]) -> None:
     """競合投稿DBに投稿単位のレコードを一括追加する。
-    カラム: competitor_id / post_id / content / likes / replies / posted_at / collected_at
-    既存の post_id は上書きせず追記のみ（重複は呼び出し元で制御）。
+    カラム: content / likes / replies / posted_at
     """
     if not records:
         return
@@ -118,29 +117,17 @@ def append_competitor_posts(records: list[dict]) -> None:
     client = get_client()
     sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("競合投稿DB")
 
-    # 既存の post_id を取得して重複を除外
-    existing = sheet.get_all_records()
-    existing_ids = {str(r.get("post_id", "")) for r in existing}
-
-    rows = []
-    for r in records:
-        if str(r.get("post_id", "")) in existing_ids:
-            continue
-        rows.append([
-            r.get("competitor_id", ""),
-            r.get("post_id", ""),
+    rows = [
+        [
             r.get("content", ""),
             r.get("likes", 0),
             r.get("replies", 0),
             r.get("posted_at", ""),
-            r.get("collected_at", ""),
-        ])
-
-    if rows:
-        sheet.append_rows(rows, value_input_option="RAW")
-        print(f"[Sheets] 競合投稿DB記録: {len(rows)}件追加（重複{len(records) - len(rows)}件スキップ）")
-    else:
-        print("[Sheets] 競合投稿DB: 新規投稿なし（全件重複スキップ）")
+        ]
+        for r in records
+    ]
+    sheet.append_rows(rows, value_input_option="RAW")
+    print(f"[Sheets] 競合投稿DB記録: {len(rows)}件追加")
 
 
 def get_recent_competitor_posts(days: int = 14) -> list[dict]:

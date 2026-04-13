@@ -82,7 +82,6 @@ def summarize_competitor_data(competitor_data: list[dict], competitor_posts: lis
         lines.append("【競合分析サマリー】")
         for r in competitor_data[-10:]:  # 直近10件
             lines.append(
-                f"- {r.get('competitor_id', '')}: "
                 f"テーマ={r.get('dominant_themes', '')} / "
                 f"空白地帯={r.get('positioning_gap', '')} / "
                 f"平均エンゲージメント={r.get('avg_engagement_rate', 0)}"
@@ -101,8 +100,7 @@ def summarize_competitor_data(competitor_data: list[dict], competitor_posts: lis
             if not content:
                 continue
             lines.append(
-                f"競合投稿{i}（{p.get('competitor_id', '')} / "
-                f"いいね:{p.get('likes', 0)} リプライ:{p.get('replies', 0)}）:\n{content}"
+                f"競合投稿{i}（いいね:{p.get('likes', 0)} リプライ:{p.get('replies', 0)}）:\n{content}"
             )
 
     return "\n".join(lines)
