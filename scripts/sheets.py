@@ -85,7 +85,7 @@ def bulk_upsert_metrics_records(records: list[dict]) -> None:
 
 
 def append_competitor_record(record: dict) -> None:
-    """競合分析DBにレコードを追加（Sheet3）"""
+    """競合分析DBにレコードを追加（集計サマリー行）"""
     if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
         print("[Sheets] 認証情報が未設定のためスキップ")
         return
@@ -99,9 +99,52 @@ def append_competitor_record(record: dict) -> None:
         record.get("avg_engagement_rate", 0.0),
         record.get("dominant_themes", ""),
         record.get("positioning_gap", ""),
+        record.get("thread_analysis", ""),
         record.get("collected_at", ""),
     ]
     sheet.append_row(row)
+
+
+
+def get_recent_competitor_posts(days: int = 14, unanalyzed_only: bool = False) -> list[dict]:
+    """競合投稿DBから投稿を返す。
+    unanalyzed_only=True のとき analyzed が空の行のみ返し、_row に行番号（1始まり）を付与する。
+    """
+    if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
+        return []
+
+    import datetime
+    client = get_client()
+    sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("競合投稿DB")
+    records = sheet.get_all_records()
+
+    result = []
+    if unanalyzed_only:
+        for i, r in enumerate(records):
+            if str(r.get("analyzed", "")).strip().upper() != "TRUE":
+                result.append({**r, "_row": i + 2})  # ヘッダー行分 +1、さらに1始まりで +1
+    else:
+        cutoff = datetime.datetime.now(
+            datetime.timezone(datetime.timedelta(hours=9))
+        ) - datetime.timedelta(days=days)
+        for r in records:
+            if _is_recent(r.get("posted_at", ""), cutoff):
+                result.append(r)
+    return result
+
+
+def mark_competitor_posts_analyzed(row_numbers: list[int]) -> None:
+    """競合投稿DBの指定行の analyzed カラム（G列）を TRUE にする"""
+    if not row_numbers:
+        return
+    if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
+        return
+
+    client = get_client()
+    sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("競合投稿DB")
+    updates = [{"range": f"G{row}", "values": [["TRUE"]]} for row in row_numbers]
+    sheet.batch_update(updates)
+    print(f"[Sheets] 競合投稿DB: {len(row_numbers)}件を分析済みにマーク")
 
 
 def get_recent_post_ids(days: int = 2) -> list[dict]:
@@ -163,19 +206,6 @@ def get_recent_competitor_data() -> list[dict]:
     sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("競合分析DB")
     return sheet.get_all_records()
 
-
-def get_competitor_accounts() -> list[str]:
-    """競合分析DB Sheetから競合アカウントIDリストを取得"""
-    if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
-        return []
-
-    client = get_client()
-    try:
-        sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("競合アカウント")
-        records = sheet.get_all_records()
-        return [r["account_id"] for r in records if r.get("account_id")]
-    except Exception:
-        return []
 
 
 def _normalize_id(value) -> str:
