@@ -1,23 +1,16 @@
 """
 競合分析スクリプト
-Threads API で競合アカウントの投稿（内容・いいね・リプライ）を取得し、
-競合投稿DB に記録する。また Claude API で集計分析を行い競合分析DB にも記録する。
+Google Sheets「競合投稿DB」に手動入力された投稿データを読み込み、
+Claude API で集計分析を行い「競合分析DB」にサマリーを記録する。
 火・金 08:00 JST に実行。
 """
 
 import os
 import json
 import datetime
-import requests
 import anthropic
-from sheets import (
-    get_competitor_accounts,
-    append_competitor_posts,
-    append_competitor_record,
-)
+from sheets import get_recent_competitor_posts, append_competitor_record
 
-THREADS_TOKEN = os.environ.get("THREADS_TOKEN", "")
-BASE_THREADS_URL = "https://graph.threads.net/v1.0"
 STRATEGY_PATH = os.path.join(os.path.dirname(__file__), "../config/strategy.json")
 
 
@@ -26,50 +19,25 @@ def load_strategy() -> dict:
         return json.load(f)
 
 
-def fetch_competitor_posts(account_id: str, limit: int = 20) -> list[dict]:
-    """競合アカウントの投稿一覧を Threads API で取得する"""
-    if not THREADS_TOKEN:
-        print("[競合分析] Threadsトークンが未設定のためスキップ")
-        return []
-
-    url = f"{BASE_THREADS_URL}/{account_id}/threads"
-    resp = requests.get(url, params={
-        "fields": "id,text,timestamp,like_count,replies_count",
-        "limit": limit,
-        "access_token": THREADS_TOKEN,
-    })
-    data = resp.json()
-
-    if "data" not in data:
-        print(f"[競合分析] 投稿取得失敗 {account_id}: {data}")
-        return []
-
-    posts = []
-    for item in data["data"]:
-        posts.append({
-            "post_id": str(item.get("id", "")),
-            "content": item.get("text", ""),
-            "likes": int(item.get("like_count", 0)),
-            "replies": int(item.get("replies_count", 0)),
-            "posted_at": item.get("timestamp", ""),
-        })
-
-    print(f"[競合分析] {account_id}: {len(posts)}件取得")
-    return posts
-
-
 def analyze_with_claude(account_id: str, posts: list[dict], strategy: dict) -> dict:
-    """Claude API で競合投稿を分析し、集計結果を返す"""
+    """Claude API で競合投稿を集計分析し、サマリーを返す"""
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
-    # いいね＋リプライ順にソートして上位を分析対象に
-    sorted_posts = sorted(posts, key=lambda p: p["likes"] + p["replies"], reverse=True)
+    sorted_posts = sorted(
+        posts,
+        key=lambda p: int(p.get("likes", 0)) + int(p.get("replies", 0)),
+        reverse=True,
+    )
 
     posts_text = "\n\n".join([
         f"投稿{i + 1}（いいね:{p['likes']} リプライ:{p['replies']}）:\n{p['content']}"
         for i, p in enumerate(sorted_posts[:15])
-        if p.get("content")
+        if str(p.get("content", "")).strip()
     ])
+
+    if not posts_text:
+        print(f"[競合分析] {account_id}: 本文のある投稿がないためスキップ")
+        return {}
 
     positioning = strategy.get("positioning", {})
 
@@ -80,7 +48,7 @@ def analyze_with_claude(account_id: str, posts: list[dict], strategy: dict) -> d
 - コンセプト：{positioning.get("concept", "")}
 - 差別化軸：{positioning.get("differentiation", "")}
 
-【競合の投稿（直近・エンゲージメント高い順）】
+【競合の投稿（エンゲージメント高い順）】
 {posts_text}
 
 【出力形式】
@@ -99,24 +67,21 @@ JSON形式のみで出力してください（前後の説明文は不要）：
     )
 
     raw = message.content[0].text.strip()
-    # コードブロックがある場合は除去
     if "```json" in raw:
         raw = raw.split("```json")[1].split("```")[0].strip()
     elif "```" in raw:
         raw = raw.split("```")[1].split("```")[0].strip()
 
     try:
-        result = json.loads(raw)
+        return json.loads(raw)
     except Exception as e:
         print(f"[競合分析] Claude分析のJSON解析失敗 ({account_id}): {e}")
-        result = {
+        return {
             "top_posts": raw[:200],
             "avg_engagement_rate": 0.0,
             "dominant_themes": "",
             "positioning_gap": "",
         }
-
-    return result
 
 
 def main():
@@ -124,34 +89,27 @@ def main():
         datetime.timezone(datetime.timedelta(hours=9))
     ).isoformat()
 
-    accounts = get_competitor_accounts()
-    if not accounts:
-        print("[競合分析] 競合アカウントが未登録。「競合アカウント」シートに account_id を追加してください。")
+    # 競合投稿DBから手動入力データを取得（直近14日分）
+    posts = get_recent_competitor_posts(days=14)
+    if not posts:
+        print("[競合分析] 競合投稿DBにデータがありません。「競合投稿DB」シートに手動入力してください。")
         return
 
-    strategy = load_strategy()
-    print(f"[競合分析] 対象アカウント: {len(accounts)}件")
+    # competitor_id ごとにグループ化
+    groups: dict[str, list[dict]] = {}
+    for p in posts:
+        cid = str(p.get("competitor_id", ""))
+        if cid:
+            groups.setdefault(cid, []).append(p)
 
-    all_posts: list[dict] = []
-    for account_id in accounts:
-        posts = fetch_competitor_posts(account_id)
-        if not posts:
+    print(f"[競合分析] 対象アカウント: {len(groups)}件 / 投稿数: {len(posts)}件")
+    strategy = load_strategy()
+
+    for account_id, account_posts in groups.items():
+        analysis = analyze_with_claude(account_id, account_posts, strategy)
+        if not analysis:
             continue
 
-        # 投稿単位レコードを作成
-        for post in posts:
-            all_posts.append({
-                "competitor_id": account_id,
-                "post_id": post["post_id"],
-                "content": post["content"],
-                "likes": post["likes"],
-                "replies": post["replies"],
-                "posted_at": post["posted_at"],
-                "collected_at": now,
-            })
-
-        # Claude で集計分析
-        analysis = analyze_with_claude(account_id, posts, strategy)
         append_competitor_record({
             "competitor_id": account_id,
             "platform": "threads",
@@ -161,14 +119,7 @@ def main():
             "positioning_gap": analysis.get("positioning_gap", ""),
             "collected_at": now,
         })
-        print(f"[競合分析] {account_id}: 集計分析を記録しました")
-
-    # 投稿内容・メトリクスを一括記録
-    if all_posts:
-        append_competitor_posts(all_posts)
-        print(f"[競合分析] 競合投稿DB記録完了（{len(all_posts)}件）")
-    else:
-        print("[競合分析] 記録対象の投稿がありませんでした")
+        print(f"[競合分析] {account_id}: 集計分析を競合分析DBに記録しました")
 
 
 if __name__ == "__main__":

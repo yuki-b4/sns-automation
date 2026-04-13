@@ -101,21 +101,20 @@ sns-automation/
 ### Flow 3：Competitor Analysis（火・金 08:00 JST）
 
 ```
-1. Google Sheets「競合アカウント」シートから競合アカウントIDリストを取得
-2. 各競合アカウントに対して Threads API で直近20投稿を取得
-   - 取得フィールド：id / text / timestamp / like_count / replies_count
-3. Google Sheets「競合投稿DB」に投稿単位で記録（重複post_idはスキップ）
-   - 記録カラム：competitor_id / post_id / content / likes / replies / posted_at / collected_at
-4. Claude API（claude-opus-4-6）で競合投稿を集計分析
+1. Google Sheets「競合投稿DB」から直近14日分の手動入力データを取得
+   ※ 競合の投稿は Threads API では取得不可のため手動入力
+   ※ 入力カラム：competitor_id / post_id / content / likes / replies / posted_at / collected_at
+2. competitor_id ごとにグループ化
+3. Claude API（claude-opus-4-6）で競合投稿を集計分析
    - top_posts：エンゲージメント上位3件の共通点・要約
    - avg_engagement_rate：(いいね+リプライ)/投稿数 の近似値
    - dominant_themes：頻出テーマ・キーワード
    - positioning_gap：自分のポジションとの差分・空白地帯
-5. Google Sheets「競合分析DB」に集計サマリー行を記録
+4. Google Sheets「競合分析DB」に集計サマリー行を記録
 ```
 
 **フィードバックサイクル：**
-- 「競合投稿DB」に投稿の内容（content）・いいね・リプライを蓄積することで、
+- 「競合投稿DB」に競合の投稿内容・いいね・リプライを手動入力することで、
   週次レポートで「どんな構成・内容が競合でエンゲージメントを取っているか」を
   Claude に分析させ、自社の投稿内容構成の改善に活用できる。
 
