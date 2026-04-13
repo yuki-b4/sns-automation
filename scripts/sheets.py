@@ -106,7 +106,9 @@ def append_competitor_record(record: dict) -> None:
 
 def append_competitor_posts(records: list[dict]) -> None:
     """競合投稿DBに投稿単位のレコードを一括追加する。
-    カラム: content / likes / replies / posted_at
+    カラム: content / likes / replies / posted_at / thread_id / reply_order
+    thread_id: 同じスレッドに同じ値を振る（スタンドアロンは空欄）
+    reply_order: ルートが0、リプライが1/2/3…（スタンドアロンは空欄）
     """
     if not records:
         return
@@ -123,6 +125,8 @@ def append_competitor_posts(records: list[dict]) -> None:
             r.get("likes", 0),
             r.get("replies", 0),
             r.get("posted_at", ""),
+            r.get("thread_id", ""),
+            r.get("reply_order", ""),
         ]
         for r in records
     ]

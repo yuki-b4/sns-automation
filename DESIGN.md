@@ -103,7 +103,9 @@ sns-automation/
 ```
 1. Google Sheets「競合投稿DB」から直近14日分の手動入力データを取得
    ※ 競合の投稿は Threads API では取得不可のため手動入力
-   ※ 入力カラム：content / likes / replies / posted_at
+   ※ 入力カラム：content / likes / replies / posted_at / thread_id / reply_order
+   ※ thread_id：同じスレッドに同じ値を振る（スタンドアロン投稿は空欄）
+   ※ reply_order：ルートが 0、リプライが 1/2/3…（スタンドアロン投稿は空欄）
 2. competitor_id ごとにグループ化
 3. Claude API（claude-opus-4-6）で競合投稿を集計分析
    - top_posts：エンゲージメント上位3件の共通点・要約
@@ -145,7 +147,7 @@ sns-automation/
 | 投稿DB | 全投稿の記録 | post_id / platform / post_type / content / posted_at / week_number |
 | メトリクスDB | エンゲージメントデータ | post_id / collected_at / likes / reposts / replies / impressions / engagement_rate |
 | 競合分析DB | 競合の集計サマリー | competitor_id / platform / top_posts / avg_engagement_rate / dominant_themes / positioning_gap / collected_at |
-| 競合投稿DB | 競合の投稿単位データ（手動入力） | content / likes / replies / posted_at |
+| 競合投稿DB | 競合の投稿単位データ（手動入力） | content / likes / replies / posted_at / thread_id / reply_order |
 | 競合アカウント | 分析対象の競合リスト | account_id |
 
 ---

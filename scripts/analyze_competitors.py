@@ -20,42 +20,88 @@ def load_strategy() -> dict:
         return json.load(f)
 
 
+def _build_posts_text(posts: list[dict]) -> str:
+    """投稿リストをスレッド構造を保ったプロンプト用テキストに変換する"""
+    standalone = [p for p in posts if not str(p.get("thread_id", "")).strip()]
+    threaded = [p for p in posts if str(p.get("thread_id", "")).strip()]
+
+    blocks: list[str] = []
+
+    # スタンドアロン投稿（エンゲージメント降順）
+    if standalone:
+        sorted_standalone = sorted(
+            standalone,
+            key=lambda p: int(p.get("likes", 0)) + int(p.get("replies", 0)),
+            reverse=True,
+        )
+        blocks.append("＜スタンドアロン投稿＞")
+        for i, p in enumerate(sorted_standalone[:10], 1):
+            content = str(p.get("content", "")).strip()
+            if not content:
+                continue
+            blocks.append(
+                f"投稿{i}（いいね:{p.get('likes', 0)} リプライ:{p.get('replies', 0)}）:\n{content}"
+            )
+
+    # スレッド投稿（thread_idごとにグループ化・ルートのエンゲージメント降順）
+    if threaded:
+        groups: dict[str, list[dict]] = {}
+        for p in threaded:
+            tid = str(p.get("thread_id", ""))
+            groups.setdefault(tid, []).append(p)
+
+        def root_engagement(group: list[dict]) -> int:
+            root = next((p for p in group if str(p.get("reply_order", "")) == "0"), group[0])
+            return int(root.get("likes", 0)) + int(root.get("replies", 0))
+
+        sorted_groups = sorted(groups.values(), key=root_engagement, reverse=True)
+
+        blocks.append("\n＜スレッド投稿＞")
+        for t_i, group in enumerate(sorted_groups[:5], 1):
+            sorted_group = sorted(group, key=lambda p: int(p.get("reply_order") or 0))
+            thread_lines = [f"スレッド{t_i}:"]
+            for p in sorted_group:
+                content = str(p.get("content", "")).strip()
+                if not content:
+                    continue
+                order = p.get("reply_order", "")
+                label = "ルート" if str(order) == "0" else f"リプライ{order}"
+                thread_lines.append(
+                    f"  {label}（いいね:{p.get('likes', 0)} リプライ:{p.get('replies', 0)}）:\n  {content}"
+                )
+            blocks.append("\n".join(thread_lines))
+
+    return "\n\n".join(blocks)
+
+
 def analyze_with_claude(posts: list[dict], strategy: dict) -> dict:
     """Claude API で競合投稿を集計分析し、サマリーを返す"""
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
-    sorted_posts = sorted(
-        posts,
-        key=lambda p: int(p.get("likes", 0)) + int(p.get("replies", 0)),
-        reverse=True,
-    )
+    posts_text = _build_posts_text(posts)
 
-    posts_text = "\n\n".join([
-        f"投稿{i + 1}（いいね:{p['likes']} リプライ:{p['replies']}）:\n{p['content']}"
-        for i, p in enumerate(sorted_posts[:15])
-        if str(p.get("content", "")).strip()
-    ])
-
-    if not posts_text:
+    if not posts_text.strip():
         print("[競合分析] 本文のある投稿がないためスキップ")
         return {}
 
     positioning = strategy.get("positioning", {})
 
     prompt = f"""あなたはSNS戦略アナリストです。以下の競合投稿を分析し、日本語で回答してください。
+投稿は「スタンドアロン投稿」と「スレッド投稿（ルート＋リプライ1/2/3…）」に分かれています。
+スレッド投稿は一連の文章として読み、構成パターンも分析対象に含めてください。
 
 【自社ポジション】
 - ポジション：{positioning.get("position", "")}
 - コンセプト：{positioning.get("concept", "")}
 - 差別化軸：{positioning.get("differentiation", "")}
 
-【競合の投稿（エンゲージメント高い順）】
+【競合の投稿】
 {posts_text}
 
 【出力形式】
 JSON形式のみで出力してください（前後の説明文は不要）：
 {{
-  "top_posts": "エンゲージメント上位3件の共通点・要約（200字以内）",
+  "top_posts": "エンゲージメント上位3件の共通点・要約。スレッド投稿はその構成パターンも含めること（200字以内）",
   "avg_engagement_rate": いいね+リプライの合計を投稿数で割った数値（小数点2桁）,
   "dominant_themes": "頻出テーマ・キーワード（カンマ区切り、5件程度）",
   "positioning_gap": "自社ポジションとの差分・競合が取れていない空白地帯（200字以内）"
