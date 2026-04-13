@@ -93,8 +93,6 @@ def append_competitor_record(record: dict) -> None:
     client = get_client()
     sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("競合分析DB")
     row = [
-        record.get("competitor_id", ""),
-        record.get("platform", ""),
         record.get("top_posts", ""),
         record.get("avg_engagement_rate", 0.0),
         record.get("dominant_themes", ""),

@@ -154,8 +154,6 @@ def main():
         return
 
     append_competitor_record({
-        "competitor_id": "",
-        "platform": "threads",
         "top_posts": analysis.get("top_posts", ""),
         "avg_engagement_rate": analysis.get("avg_engagement_rate", 0.0),
         "dominant_themes": analysis.get("dominant_themes", ""),
