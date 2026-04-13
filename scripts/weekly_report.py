@@ -149,12 +149,12 @@ def generate_report(strategy: dict, own_summary: str, competitor_summary: str, p
 
 【出力の制約】
 - **、--、##、--- などの装飾記号は使わず、プレーンテキストで出力すること
-- 全体で約2500文字を目安に記述すること
+- 全体で約1200文字を目安に記述すること
 - 文字数が余る場合は各項目の分析を深めること、超える場合は具体例を削減して調整すること（項目や論点は省かないこと）"""
 
     message = client.messages.create(
         model="claude-opus-4-6",
-        max_tokens=4096,
+        max_tokens=2048,
         messages=[{"role": "user", "content": prompt}],
     )
     return message.content[0].text.strip()
