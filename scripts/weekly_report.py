@@ -126,7 +126,7 @@ def generate_report(strategy: dict, own_summary: str, competitor_summary: str, p
 
     message = client.messages.create(
         model="claude-opus-4-6",
-        max_tokens=1024,
+        max_tokens=4096,
         messages=[{"role": "user", "content": prompt}],
     )
     return message.content[0].text.strip()
