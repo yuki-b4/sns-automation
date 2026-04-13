@@ -51,24 +51,40 @@ def notify_slack(content: str, post_type: str, title: str = "Threads投稿完了
         print("[Slack] 通知成功")
 
 
-def notify_slack_report(report_text: str, title: str = "週次改善レポート") -> None:
-    """レポートテキストをSlackに送信"""
+def notify_slack_report(report_text: str, title: str = "改善レポート") -> None:
+    """レポート生成完了をSlackに通知（全文はActionsログで確認）"""
     if not SLACK_WEBHOOK:
         print("[Slack] WebhookURLが未設定のためスキップ")
         return
 
-    message = {
-        "blocks": [
-            {
-                "type": "header",
-                "text": {"type": "plain_text", "text": f"📊 {title}"},
+    run_id = os.environ.get("GITHUB_RUN_ID", "")
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    actions_url = f"https://github.com/{repo}/actions/runs/{run_id}" if run_id and repo else ""
+
+    blocks = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": f"📊 {title}が生成されました"},
+        },
+    ]
+
+    if actions_url:
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "全文はGitHub Actionsのログで確認できます。"},
+            "accessory": {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "ログを開く"},
+                "url": actions_url,
             },
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": report_text[:3000]},  # Slack上限対策
-            },
-        ]
-    }
+        })
+    else:
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "全文はGitHub Actionsのログで確認してください。"},
+        })
+
+    message = {"blocks": blocks}
 
     resp = requests.post(SLACK_WEBHOOK, data=json.dumps(message), headers={"Content-Type": "application/json"})
     if resp.status_code != 200:
