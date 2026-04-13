@@ -51,8 +51,11 @@ def notify_slack(content: str, post_type: str, title: str = "Threads投稿完了
         print("[Slack] 通知成功")
 
 
-def notify_slack_report(report_text: str, title: str = "改善レポート") -> None:
-    """レポート生成完了をSlackに通知（全文はActionsログで確認）"""
+def notify_slack_report(report_text: str, title: str = "改善レポート", body: str = "") -> None:
+    """レポート生成完了をSlackに通知。
+    body が指定された場合はその本文を直接Slackメッセージに含める（最大2800字）。
+    省略時は全文をActionsログで確認するリンクのみ送信。
+    """
     if not SLACK_WEBHOOK:
         print("[Slack] WebhookURLが未設定のためスキップ")
         return
@@ -68,7 +71,13 @@ def notify_slack_report(report_text: str, title: str = "改善レポート") -> 
         },
     ]
 
-    if actions_url:
+    if body:
+        # 本文をSlackに直接掲載（Slack mrkdwn ブロックの上限2800字で切り捨て）
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": body[:2800]},
+        })
+    elif actions_url:
         blocks.append({
             "type": "section",
             "text": {"type": "mrkdwn", "text": "全文はGitHub Actionsのログで確認できます。"},
