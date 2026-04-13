@@ -1,8 +1,8 @@
-name: Daily Metrics Collection 22:00 JST
+name: Daily Metrics Collection 06:00 JST
 
 on:
   schedule:
-    - cron: '0 13 * * *'  # UTC 13:00 = JST 22:00
+    - cron: '0 21 * * *'  # UTC 21:00 = JST 06:00
   workflow_dispatch:
 
 jobs:
