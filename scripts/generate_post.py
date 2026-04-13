@@ -39,6 +39,52 @@ def build_prompt(strategy: dict, post_type: str) -> str:
     post_info = strategy["post_types"][post_type]
     persona = strategy["persona"]
 
+    # 投稿タイプ別の追加ルールと出力フォーマットを設定
+    if post_type == "structure":
+        type_specific_rules = """
+【体系化系専用ルール】
+- 「なぜ意志力に頼ると限界があるか」のロジックを1文で示してから仕組みの話に入る
+- 設計プロセス・手順を最低3ステップで具体的に示す（「毎朝〇時に」「〇分以内に」「3段階で」など数字・行動レベルで）
+- 「心構え」「マインドセット」「根性」「精神力」だけで終わらない。必ず具体的な行動・環境設計まで落とす
+- 「再現性」「設計」「仕組み」「構造」のいずれかを本文に含める
+- 「できる人vsできない人」型の対比フォーマットは使わない（競合との差別化）
+- 一般大衆向けの啓発トーンではなく、既に高い成果を出している人がさらに上へ行くための専門的トーンで書く
+"""
+        output_format = """以下の形式で出力してください（他の説明・前置き不要）：
+
+【本文】
+（フックとなる問い・場面・数字で始め、意志力の限界→仕組みが必要な理由を100〜150文字で）
+
+【補足リプライ1】
+（具体的な設計ステップを3〜5項目のリスト形式で。60〜120文字）
+
+【補足リプライ2】
+（読者への問いかけ、または再現性・持続性を強調する締めの一言。30〜60文字）"""
+    elif post_type == "opinion":
+        type_specific_rules = """
+【業界考察系専用ルール】
+- ハイパフォーマー（コンサル・PM・医師・弁護士・スタートアップ創業者）特化の視点で語る。一般向けの啓発トーンは禁止
+- 「この人にしか語れない」専門的・具体的視点を最低1つ入れる（HRV・判断コスト・認知負荷・行動設計・環境設計などの専門概念を活用）
+- 感情論・精神論で終わらず、構造的な理由・設計視点で締める
+- 「できる人vsできない人」型の対比フォーマットは使わない（競合との差別化）
+"""
+        output_format = """以下の形式で出力してください（他の説明・前置き不要）：
+
+【本文】
+（ここに本文）
+
+【補足リプライ】
+（ここに補足リプライ）"""
+    else:
+        type_specific_rules = ""
+        output_format = """以下の形式で出力してください（他の説明・前置き不要）：
+
+【本文】
+（ここに本文）
+
+【補足リプライ】
+（ここに補足リプライ）"""
+
     return f"""あなたはSNSコンテンツライターです。
 以下の戦略に基づいて、日本語のThreads投稿文と補足セルフリプライを生成してください。
 
@@ -55,50 +101,56 @@ def build_prompt(strategy: dict, post_type: str) -> str:
 
 【今回の投稿タイプ】
 {post_info["label"]}（{post_info["description"]}）
-
-【ルール】
+{type_specific_rules}
+【共通ルール】
 - 本文：100〜180文字程度（Threadsのカジュアル・会話的なトーンで）
 - 語尾は断定的・力強く
 - 冒頭で目を引くフックを入れる
 - 具体的な行動や言葉を使う
 - 自慢に見える表現は避け、共感・学び・プロセスとして語る
 - 「ハイパフォーマー」「プロフェッショナル」「コンサル」「PM」「医師」「弁護士」など職種は適宜使ってよい
-- 補足リプライ：30〜60文字の追加情報・問いかけ・CTAのいずれか（本文の続きや深掘りとなる内容）
 - 「否定→転換→正解提示」の三段構成を毎回繰り返さないこと（構成にバリエーションを持たせる）
 - 「もう終わり」「〜からしか生まれない」など同じ締めフレーズを使い回さないこと
 - 冒頭は抽象的な主語（「〇〇な人は」）より具体的な場面・体験・数字から入ることを優先する
 - 対話系の場合は、質問する前に必ず自分の考えや経験を先に開示すること
 
-以下の形式で出力してください（他の説明・前置き不要）：
-
-【本文】
-（ここに本文）
-
-【補足リプライ】
-（ここに補足リプライ）"""
+{output_format}"""
 
 
 def _parse_post(raw: str) -> dict:
-    """生成テキストを本文と補足リプライにパース"""
+    """生成テキストを本文・補足リプライ1・補足リプライ2にパース。
+    体系化系（structure）は3投稿構成のため補足リプライ2まで対応。"""
     content = ""
     self_reply = ""
-    if "【本文】" in raw and "【補足リプライ】" in raw:
+    self_reply2 = ""
+
+    if "【補足リプライ1】" in raw and "【補足リプライ2】" in raw:
+        # 3投稿構成（structure用）
+        parts_r2 = raw.split("【補足リプライ2】")
+        self_reply2 = parts_r2[1].strip()
+        parts_r1 = parts_r2[0].split("【補足リプライ1】")
+        content = parts_r1[0].replace("【本文】", "").strip()
+        self_reply = parts_r1[1].strip()
+    elif "【本文】" in raw and "【補足リプライ】" in raw:
+        # 2投稿構成（通常）
         parts = raw.split("【補足リプライ】")
         content = parts[0].replace("【本文】", "").strip()
         self_reply = parts[1].strip()
     else:
         content = raw
-    return {"content": content, "self_reply": self_reply}
+
+    return {"content": content, "self_reply": self_reply, "self_reply2": self_reply2}
 
 
 def generate_post(post_type: str, strategy: dict) -> dict:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
-    # Threads用コンテンツ生成
+    # Threads用コンテンツ生成（structure は3投稿構成のためmax_tokens拡張）
     threads_prompt = build_prompt(strategy, post_type)
+    max_tokens = 800 if post_type == "structure" else 512
     threads_message = client.messages.create(
         model="claude-opus-4-6",
-        max_tokens=512,
+        max_tokens=max_tokens,
         messages=[{"role": "user", "content": threads_prompt}],
     )
     threads_result = _parse_post(threads_message.content[0].text.strip())
@@ -106,6 +158,7 @@ def generate_post(post_type: str, strategy: dict) -> dict:
     return {
         "content": threads_result["content"],
         "self_reply": threads_result["self_reply"],
+        "self_reply2": threads_result.get("self_reply2", ""),
     }
 
 
@@ -118,26 +171,38 @@ def main():
     result = generate_post(post_type, strategy)
     content = result["content"]
     self_reply = result["self_reply"]
+    self_reply2 = result.get("self_reply2", "")
 
     print(f"[生成完了] タイプ: {post_type}")
     print(f"[Threads本文]\n{content}\n")
     if self_reply:
-        print(f"[Threads補足リプライ]\n{self_reply}\n")
+        print(f"[Threads補足リプライ1]\n{self_reply}\n")
+    if self_reply2:
+        print(f"[Threads補足リプライ2]\n{self_reply2}\n")
 
     # Threads へ自動投稿
     threads_id = post_to_threads(content)
     # linkedin_id = post_to_linkedin(content)  # LinkedIn 一時無効化
 
-    # セルフリプライ投稿（投稿成功かつ補足リプライがある場合）
+    # セルフリプライ1投稿（投稿成功かつ補足リプライがある場合）
+    reply_id = None
     if threads_id and self_reply:
         reply_id = post_to_threads(self_reply, reply_to_id=threads_id)
         if reply_id:
-            print(f"[Threads] セルフリプライ投稿成功: {reply_id}")
+            print(f"[Threads] セルフリプライ1投稿成功: {reply_id}")
+
+    # セルフリプライ2投稿（structure 3投稿構成）
+    if reply_id and self_reply2:
+        reply2_id = post_to_threads(self_reply2, reply_to_id=reply_id)
+        if reply2_id:
+            print(f"[Threads] セルフリプライ2投稿成功: {reply2_id}")
 
     # Threadsへの投稿内容をSlack通知
     slack_content = content
     if self_reply:
-        slack_content += f"\n\n↩️ セルフリプライ：{self_reply}"
+        slack_content += f"\n\n↩️ セルフリプライ1：{self_reply}"
+    if self_reply2:
+        slack_content += f"\n\n↩️ セルフリプライ2：{self_reply2}"
     notify_slack(slack_content, post_type)
 
     # 投稿DBに記録
