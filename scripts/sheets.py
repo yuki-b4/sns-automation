@@ -85,7 +85,7 @@ def bulk_upsert_metrics_records(records: list[dict]) -> None:
 
 
 def append_competitor_record(record: dict) -> None:
-    """競合分析DBにレコードを追加（Sheet3）"""
+    """競合分析DBにレコードを追加（集計サマリー行）"""
     if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
         print("[Sheets] 認証情報が未設定のためスキップ")
         return
@@ -102,6 +102,66 @@ def append_competitor_record(record: dict) -> None:
         record.get("collected_at", ""),
     ]
     sheet.append_row(row)
+
+
+def append_competitor_posts(records: list[dict]) -> None:
+    """競合投稿DBに投稿単位のレコードを一括追加する。
+    カラム: competitor_id / post_id / content / likes / replies / posted_at / collected_at
+    既存の post_id は上書きせず追記のみ（重複は呼び出し元で制御）。
+    """
+    if not records:
+        return
+    if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
+        print("[Sheets] 認証情報が未設定のためスキップ")
+        return
+
+    client = get_client()
+    sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("競合投稿DB")
+
+    # 既存の post_id を取得して重複を除外
+    existing = sheet.get_all_records()
+    existing_ids = {str(r.get("post_id", "")) for r in existing}
+
+    rows = []
+    for r in records:
+        if str(r.get("post_id", "")) in existing_ids:
+            continue
+        rows.append([
+            r.get("competitor_id", ""),
+            r.get("post_id", ""),
+            r.get("content", ""),
+            r.get("likes", 0),
+            r.get("replies", 0),
+            r.get("posted_at", ""),
+            r.get("collected_at", ""),
+        ])
+
+    if rows:
+        sheet.append_rows(rows, value_input_option="RAW")
+        print(f"[Sheets] 競合投稿DB記録: {len(rows)}件追加（重複{len(records) - len(rows)}件スキップ）")
+    else:
+        print("[Sheets] 競合投稿DB: 新規投稿なし（全件重複スキップ）")
+
+
+def get_recent_competitor_posts(days: int = 14) -> list[dict]:
+    """競合投稿DBから直近N日分の投稿を返す"""
+    if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
+        return []
+
+    import datetime
+    client = get_client()
+    sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("競合投稿DB")
+    records = sheet.get_all_records()
+
+    cutoff = datetime.datetime.now(
+        datetime.timezone(datetime.timedelta(hours=9))
+    ) - datetime.timedelta(days=days)
+
+    result = []
+    for r in records:
+        if _is_recent(r.get("collected_at", "") or r.get("posted_at", ""), cutoff):
+            result.append(r)
+    return result
 
 
 def get_recent_post_ids(days: int = 2) -> list[dict]:

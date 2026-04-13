@@ -8,7 +8,7 @@ Claude APIで分析してSlackにレポートを送信する
 import os
 import json
 import anthropic
-from sheets import get_weekly_data, get_recent_competitor_data
+from sheets import get_weekly_data, get_recent_competitor_data, get_recent_competitor_posts
 from notify_slack import notify_slack_report
 
 
@@ -71,18 +71,40 @@ def extract_post_samples(weekly_data: dict, max_posts: int = 5) -> str:
     return "\n\n".join(lines) if lines else "サンプルなし"
 
 
-def summarize_competitor_data(competitor_data: list[dict]) -> str:
-    if not competitor_data:
+def summarize_competitor_data(competitor_data: list[dict], competitor_posts: list[dict] | None = None) -> str:
+    if not competitor_data and not competitor_posts:
         return "競合データなし"
 
     lines = []
-    for r in competitor_data[-10:]:  # 直近10件
-        lines.append(
-            f"- {r.get('competitor_id', '')}: "
-            f"テーマ={r.get('dominant_themes', '')} / "
-            f"空白地帯={r.get('positioning_gap', '')} / "
-            f"ER={r.get('avg_engagement_rate', 0)}"
+
+    # 集計サマリー（競合分析DB）
+    if competitor_data:
+        lines.append("【競合分析サマリー】")
+        for r in competitor_data[-10:]:  # 直近10件
+            lines.append(
+                f"- {r.get('competitor_id', '')}: "
+                f"テーマ={r.get('dominant_themes', '')} / "
+                f"空白地帯={r.get('positioning_gap', '')} / "
+                f"平均エンゲージメント={r.get('avg_engagement_rate', 0)}"
+            )
+
+    # 投稿内容サンプル（競合投稿DB）
+    if competitor_posts:
+        lines.append("\n【競合投稿サンプル（エンゲージメント高い順）】")
+        sorted_posts = sorted(
+            competitor_posts,
+            key=lambda p: int(p.get("likes", 0)) + int(p.get("replies", 0)),
+            reverse=True,
         )
+        for i, p in enumerate(sorted_posts[:5], 1):
+            content = str(p.get("content", "")).strip()
+            if not content:
+                continue
+            lines.append(
+                f"競合投稿{i}（{p.get('competitor_id', '')} / "
+                f"いいね:{p.get('likes', 0)} リプライ:{p.get('replies', 0)}）:\n{content}"
+            )
+
     return "\n".join(lines)
 
 
@@ -141,9 +163,10 @@ def main():
     strategy = load_strategy()
     weekly_data = get_weekly_data(days=4)
     competitor_data = get_recent_competitor_data()
+    competitor_posts = get_recent_competitor_posts(days=14)
 
     own_summary = summarize_own_data(weekly_data)
-    competitor_summary = summarize_competitor_data(competitor_data)
+    competitor_summary = summarize_competitor_data(competitor_data, competitor_posts)
     post_samples = extract_post_samples(weekly_data)
 
     print("[改善レポート] データ収集完了")
