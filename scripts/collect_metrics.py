@@ -8,7 +8,7 @@ Threads の投稿メトリクスを取得してGoogle Sheetsに記録する（po
 import os
 import datetime
 import requests
-from sheets import get_recent_post_ids, upsert_metrics_record
+from sheets import get_recent_post_ids, bulk_upsert_metrics_records
 
 THREADS_TOKEN = os.environ.get("THREADS_TOKEN", "")
 # LINKEDIN_TOKEN = os.environ.get("LINKEDIN_TOKEN", "")  # LinkedIn 一時無効化
@@ -92,6 +92,7 @@ def main():
         print("[Metrics] 対象投稿なし")
         return
 
+    collected = []
     for item in post_ids:
         post_id = item["post_id"]
         platform = item["platform"]
@@ -105,10 +106,11 @@ def main():
 
         if metrics:
             metrics["collected_at"] = now
-            upsert_metrics_record(metrics)
-            print(f"[Metrics] 記録完了: {platform} / {post_id} / ER={metrics['engagement_rate']}")
+            collected.append(metrics)
+            print(f"[Metrics] 取得完了: {platform} / {post_id} / ER={metrics['engagement_rate']}")
 
-    print("[Metrics] 収集完了")
+    bulk_upsert_metrics_records(collected)
+    print(f"[Metrics] 収集完了（{len(collected)}件記録）")
 
 
 if __name__ == "__main__":
