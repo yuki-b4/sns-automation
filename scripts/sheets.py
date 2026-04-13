@@ -41,36 +41,47 @@ def append_post_record(record: dict) -> None:
     print(f"[Sheets] 投稿DB記録: {record['platform']} / {record['post_id']}")
 
 
-def upsert_metrics_record(record: dict) -> None:
-    """メトリクスDBのレコードをpost_idで上書き（なければ末尾に追加）"""
+def bulk_upsert_metrics_records(records: list[dict]) -> None:
+    """メトリクスDBのレコードを一括upsert（読み取り1回・post_idで末尾行を上書き）"""
+    if not records:
+        return
     if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
         print("[Sheets] 認証情報が未設定のためスキップ")
         return
 
     client = get_client()
     sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("メトリクスDB")
-    row = [
-        record.get("post_id", ""),
-        record.get("collected_at", ""),
-        record.get("likes", 0),
-        record.get("reposts", 0),
-        record.get("replies", 0),
-        record.get("impressions", 0),
-        record.get("engagement_rate", 0.0),
-    ]
 
+    # 既存レコードを1回だけ読み込み、post_id → 最後の行番号 のマップを作成
     existing = sheet.get_all_records()
-    normalized_id = _normalize_id(str(record.get("post_id", "")))
-    target_row = None
+    id_to_row: dict[str, int] = {}
     for i, r in enumerate(existing):
-        if _normalize_id(str(r.get("post_id", ""))) == normalized_id:
-            target_row = i + 2  # 1-indexed + ヘッダー行（最後の一致行で上書き）
+        normalized = _normalize_id(str(r.get("post_id", "")))
+        if normalized:
+            id_to_row[normalized] = i + 2  # 1-indexed + ヘッダー行
 
-    if target_row is not None:
-        sheet.update(range_name=f"A{target_row}:G{target_row}", values=[row])
-        return
+    batch_updates = []
+    to_append = []
+    for record in records:
+        row = [
+            record.get("post_id", ""),
+            record.get("collected_at", ""),
+            record.get("likes", 0),
+            record.get("reposts", 0),
+            record.get("replies", 0),
+            record.get("impressions", 0),
+            record.get("engagement_rate", 0.0),
+        ]
+        normalized_id = _normalize_id(str(record.get("post_id", "")))
+        if normalized_id in id_to_row:
+            batch_updates.append({"range": f"A{id_to_row[normalized_id]}:G{id_to_row[normalized_id]}", "values": [row]})
+        else:
+            to_append.append(row)
 
-    sheet.append_row(row, value_input_option="RAW")
+    if batch_updates:
+        sheet.batch_update(batch_updates)
+    if to_append:
+        sheet.append_rows(to_append, value_input_option="RAW")
 
 
 def append_competitor_record(record: dict) -> None:
