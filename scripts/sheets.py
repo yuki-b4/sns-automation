@@ -41,8 +41,8 @@ def append_post_record(record: dict) -> None:
     print(f"[Sheets] 投稿DB記録: {record['platform']} / {record['post_id']}")
 
 
-def append_metrics_record(record: dict) -> None:
-    """メトリクスDBにレコードを追加（Sheet2）"""
+def upsert_metrics_record(record: dict) -> None:
+    """メトリクスDBのレコードをpost_idで上書き（なければ末尾に追加）"""
     if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
         print("[Sheets] 認証情報が未設定のためスキップ")
         return
@@ -58,6 +58,15 @@ def append_metrics_record(record: dict) -> None:
         record.get("impressions", 0),
         record.get("engagement_rate", 0.0),
     ]
+
+    existing = sheet.get_all_records()
+    normalized_id = _normalize_id(str(record.get("post_id", "")))
+    for i, r in enumerate(existing):
+        if _normalize_id(str(r.get("post_id", ""))) == normalized_id:
+            row_num = i + 2  # 1-indexed + ヘッダー行
+            sheet.update(range_name=f"A{row_num}:G{row_num}", values=[row])
+            return
+
     sheet.append_row(row, value_input_option="RAW")
 
 
