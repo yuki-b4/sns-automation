@@ -99,6 +99,7 @@ def append_competitor_record(record: dict) -> None:
         record.get("avg_engagement_rate", 0.0),
         record.get("dominant_themes", ""),
         record.get("positioning_gap", ""),
+        record.get("thread_analysis", ""),
         record.get("collected_at", ""),
     ]
     sheet.append_row(row)

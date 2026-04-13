@@ -101,15 +101,18 @@ def analyze_with_claude(posts: list[dict], strategy: dict) -> dict:
 【出力形式】
 JSON形式のみで出力してください（前後の説明文は不要）：
 {{
-  "top_posts": "エンゲージメント上位3件の共通点・要約。スレッド投稿はその構成パターンも含めること（200字以内）",
+  "top_posts": "エンゲージメント上位3件の共通点・要約（300字以内）",
   "avg_engagement_rate": いいね+リプライの合計を投稿数で割った数値（小数点2桁）,
   "dominant_themes": "頻出テーマ・キーワード（カンマ区切り、5件程度）",
-  "positioning_gap": "自社ポジションとの差分・競合が取れていない空白地帯（200字以内）"
-}}"""
+  "positioning_gap": "自社ポジションとの差分・競合が取れていない空白地帯（300字以内）",
+  "thread_analysis": "スレッド投稿の構成パターン分析。何投稿構成か・各リプライの役割・どの構成が高エンゲージメントかを具体的に記述（300字以内）。スレッド投稿がない場合は空文字"
+}}
+
+【文字数】全体で約1200文字を目安にすること"""
 
     message = client.messages.create(
         model="claude-opus-4-6",
-        max_tokens=1024,
+        max_tokens=2048,
         messages=[{"role": "user", "content": prompt}],
     )
 
@@ -124,10 +127,11 @@ JSON形式のみで出力してください（前後の説明文は不要）：
     except Exception as e:
         print(f"[競合分析] Claude分析のJSON解析失敗: {e}")
         return {
-            "top_posts": raw[:200],
+            "top_posts": raw[:300],
             "avg_engagement_rate": 0.0,
             "dominant_themes": "",
             "positioning_gap": "",
+            "thread_analysis": "",
         }
 
 
@@ -156,6 +160,7 @@ def main():
         "avg_engagement_rate": analysis.get("avg_engagement_rate", 0.0),
         "dominant_themes": analysis.get("dominant_themes", ""),
         "positioning_gap": analysis.get("positioning_gap", ""),
+        "thread_analysis": analysis.get("thread_analysis", ""),
         "collected_at": now,
     })
     print("[競合分析] 集計分析を競合分析DBに記録しました")

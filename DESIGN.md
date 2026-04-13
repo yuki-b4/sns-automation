@@ -146,7 +146,7 @@ sns-automation/
 |---|---|---|
 | 投稿DB | 全投稿の記録 | post_id / platform / post_type / content / posted_at / week_number |
 | メトリクスDB | エンゲージメントデータ | post_id / collected_at / likes / reposts / replies / impressions / engagement_rate |
-| 競合分析DB | 競合の集計サマリー | competitor_id / platform / top_posts / avg_engagement_rate / dominant_themes / positioning_gap / collected_at |
+| 競合分析DB | 競合の集計サマリー | competitor_id / platform / top_posts / avg_engagement_rate / dominant_themes / positioning_gap / thread_analysis / collected_at |
 | 競合投稿DB | 競合の投稿単位データ（手動入力） | content / likes / replies / posted_at / thread_id / reply_order |
 | 競合アカウント | 分析対象の競合リスト | account_id |
 
