@@ -1,14 +1,14 @@
 """
 エンゲージメント収集スクリプト
-Threads の投稿メトリクスを取得してGoogle Sheetsに記録する
-毎晩22:00 JSTに実行
+Threads の投稿メトリクスを取得してGoogle Sheetsに記録する（post_idで上書き）
+毎晩22:00 JSTに実行・直近30日分の投稿を対象
 ※ LinkedIn は一時無効化中（collect_linkedin_metrics は保持）
 """
 
 import os
 import datetime
 import requests
-from sheets import get_recent_post_ids, append_metrics_record
+from sheets import get_recent_post_ids, upsert_metrics_record
 
 THREADS_TOKEN = os.environ.get("THREADS_TOKEN", "")
 # LINKEDIN_TOKEN = os.environ.get("LINKEDIN_TOKEN", "")  # LinkedIn 一時無効化
@@ -86,7 +86,7 @@ def collect_threads_metrics(post_id: str) -> dict | None:
 
 def main():
     now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))).isoformat()
-    post_ids = get_recent_post_ids(days=2)
+    post_ids = get_recent_post_ids(days=30)
 
     if not post_ids:
         print("[Metrics] 対象投稿なし")
@@ -105,7 +105,7 @@ def main():
 
         if metrics:
             metrics["collected_at"] = now
-            append_metrics_record(metrics)
+            upsert_metrics_record(metrics)
             print(f"[Metrics] 記録完了: {platform} / {post_id} / ER={metrics['engagement_rate']}")
 
     print("[Metrics] 収集完了")
