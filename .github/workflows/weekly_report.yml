@@ -1,8 +1,8 @@
-name: Weekly Report 09:00 JST (Mon)
+name: Twice-Weekly Report 09:00 JST (Wed/Sat)
 
 on:
   schedule:
-    - cron: '0 0 * * 1'  # UTC 00:00 Mon = JST 09:00 Mon
+    - cron: '0 0 * * 3,6'  # UTC 00:00 Wed/Sat = JST 09:00 水曜・土曜
   workflow_dispatch:
 
 jobs:

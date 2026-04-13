@@ -1,8 +1,8 @@
 """
-週次改善レポート生成スクリプト
-Google Sheetsから過去7日分のデータ＋競合データを取得し、
+改善レポート生成スクリプト
+Google Sheetsから直近4日分のデータ＋競合データを取得し、
 Claude APIで分析してSlackにレポートを送信する
-毎週月曜 9:00 JSTに実行
+水曜・土曜 9:00 JSTに実行（週2回）
 """
 
 import os
@@ -41,7 +41,7 @@ def summarize_own_data(weekly_data: dict) -> str:
         type_stats[pt]["total_er"] += er
         type_stats[pt]["total_impressions"] += int(m.get("impressions", 0))
 
-    lines = [f"過去7日間の投稿数: {len(posts)}件"]
+    lines = [f"直近4日間の投稿数: {len(posts)}件"]
     for pt, stats in type_stats.items():
         avg_er = round(stats["total_er"] / stats["count"], 4) if stats["count"] > 0 else 0
         lines.append(
@@ -109,7 +109,7 @@ def generate_report(strategy: dict, own_summary: str, competitor_summary: str, p
 【現在の投稿タイプ配分】
 {current_ratios}
 
-【過去7日間の自社データ】
+【直近4日間の自社データ】
 {own_summary}
 {samples_section}
 【競合データ（直近）】
@@ -134,22 +134,22 @@ def generate_report(strategy: dict, own_summary: str, competitor_summary: str, p
 
 def main():
     strategy = load_strategy()
-    weekly_data = get_weekly_data(weeks=1)
+    weekly_data = get_weekly_data(days=4)
     competitor_data = get_recent_competitor_data()
 
     own_summary = summarize_own_data(weekly_data)
     competitor_summary = summarize_competitor_data(competitor_data)
     post_samples = extract_post_samples(weekly_data)
 
-    print("[週次レポート] データ収集完了")
+    print("[改善レポート] データ収集完了")
     print(f"自社データ:\n{own_summary}\n")
     print(f"競合データ:\n{competitor_summary}\n")
 
     report = generate_report(strategy, own_summary, competitor_summary, post_samples)
-    print(f"[週次レポート] 生成完了:\n{report}")
+    print(f"[改善レポート] 生成完了:\n{report}")
 
-    notify_slack_report(report, title="週次改善レポート")
-    print("[週次レポート] Slack通知完了")
+    notify_slack_report(report, title="改善レポート")
+    print("[改善レポート] Slack通知完了")
 
 
 if __name__ == "__main__":

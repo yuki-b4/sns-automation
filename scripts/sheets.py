@@ -104,8 +104,8 @@ def get_recent_post_ids(days: int = 2) -> list[dict]:
     return result
 
 
-def get_weekly_data(weeks: int = 1) -> dict:
-    """過去N週分の投稿・メトリクスデータを返す"""
+def get_weekly_data(weeks: int = 1, days: int | None = None) -> dict:
+    """過去N週分（またはN日分）の投稿・メトリクスデータを返す"""
     if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
         return {"posts": [], "metrics": []}
 
@@ -115,7 +115,8 @@ def get_weekly_data(weeks: int = 1) -> dict:
     metrics = spreadsheet.worksheet("メトリクスDB").get_all_records()
 
     import datetime
-    cutoff = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))) - datetime.timedelta(weeks=weeks)
+    delta = datetime.timedelta(days=days) if days is not None else datetime.timedelta(weeks=weeks)
+    cutoff = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))) - delta
     recent_posts = [
         {**p, "post_id": _normalize_id(p["post_id"])}
         for p in posts if _is_recent(p.get("posted_at", ""), cutoff)
