@@ -9,7 +9,7 @@ import os
 import json
 import datetime
 import anthropic
-from sheets import get_recent_competitor_posts, append_competitor_record
+from sheets import get_recent_competitor_posts, append_competitor_record, mark_competitor_posts_analyzed
 
 
 STRATEGY_PATH = os.path.join(os.path.dirname(__file__), "../config/strategy.json")
@@ -140,13 +140,13 @@ def main():
         datetime.timezone(datetime.timedelta(hours=9))
     ).isoformat()
 
-    # 競合投稿DBから手動入力データを取得（直近14日分）
-    posts = get_recent_competitor_posts(days=14)
+    # 競合投稿DBから未分析の投稿のみ取得
+    posts = get_recent_competitor_posts(unanalyzed_only=True)
     if not posts:
-        print("[競合分析] 競合投稿DBにデータがありません。「競合投稿DB」シートに手動入力してください。")
+        print("[競合分析] 未分析の投稿がありません。終了します。")
         return
 
-    print(f"[競合分析] 投稿数: {len(posts)}件")
+    print(f"[競合分析] 未分析投稿数: {len(posts)}件")
     strategy = load_strategy()
 
     analysis = analyze_with_claude(posts, strategy)
@@ -164,6 +164,10 @@ def main():
         "collected_at": now,
     })
     print("[競合分析] 集計分析を競合分析DBに記録しました")
+
+    # 分析済みフラグを立てる
+    row_numbers = [p["_row"] for p in posts]
+    mark_competitor_posts_analyzed(row_numbers)
 
 
 if __name__ == "__main__":

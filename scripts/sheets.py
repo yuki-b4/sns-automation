@@ -107,9 +107,10 @@ def append_competitor_record(record: dict) -> None:
 
 def append_competitor_posts(records: list[dict]) -> None:
     """競合投稿DBに投稿単位のレコードを一括追加する。
-    カラム: content / likes / replies / posted_at / thread_id / reply_order
+    カラム: content / likes / replies / posted_at / thread_id / reply_order / analyzed
     thread_id: 同じスレッドに同じ値を振る（スタンドアロンは空欄）
     reply_order: ルートが0、リプライが1/2/3…（スタンドアロンは空欄）
+    analyzed: 分析済みでTRUE、未分析は空欄
     """
     if not records:
         return
@@ -128,6 +129,7 @@ def append_competitor_posts(records: list[dict]) -> None:
             r.get("posted_at", ""),
             r.get("thread_id", ""),
             r.get("reply_order", ""),
+            "",  # analyzed: 未分析
         ]
         for r in records
     ]
@@ -135,8 +137,10 @@ def append_competitor_posts(records: list[dict]) -> None:
     print(f"[Sheets] 競合投稿DB記録: {len(rows)}件追加")
 
 
-def get_recent_competitor_posts(days: int = 14) -> list[dict]:
-    """競合投稿DBから直近N日分の投稿を返す"""
+def get_recent_competitor_posts(days: int = 14, unanalyzed_only: bool = False) -> list[dict]:
+    """競合投稿DBから投稿を返す。
+    unanalyzed_only=True のとき analyzed が空の行のみ返し、_row に行番号（1始まり）を付与する。
+    """
     if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
         return []
 
@@ -150,10 +154,29 @@ def get_recent_competitor_posts(days: int = 14) -> list[dict]:
     ) - datetime.timedelta(days=days)
 
     result = []
-    for r in records:
-        if _is_recent(r.get("collected_at", "") or r.get("posted_at", ""), cutoff):
-            result.append(r)
+    for i, r in enumerate(records):
+        if unanalyzed_only:
+            if str(r.get("analyzed", "")).strip().upper() == "TRUE":
+                continue
+            result.append({**r, "_row": i + 2})  # ヘッダー行分 +1、さらに1始まりで +1
+        else:
+            if _is_recent(r.get("posted_at", ""), cutoff):
+                result.append(r)
     return result
+
+
+def mark_competitor_posts_analyzed(row_numbers: list[int]) -> None:
+    """競合投稿DBの指定行の analyzed カラム（G列）を TRUE にする"""
+    if not row_numbers:
+        return
+    if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
+        return
+
+    client = get_client()
+    sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("競合投稿DB")
+    updates = [{"range": f"G{row}", "values": [["TRUE"]]} for row in row_numbers]
+    sheet.batch_update(updates)
+    print(f"[Sheets] 競合投稿DB: {len(row_numbers)}件を分析済みにマーク")
 
 
 def get_recent_post_ids(days: int = 2) -> list[dict]:
