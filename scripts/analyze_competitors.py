@@ -1,7 +1,7 @@
 """
 競合分析スクリプト
 Google Sheets「競合投稿DB」に手動入力された投稿データを読み込み、
-Claude API で集計分析を行い「競合分析DB」にサマリーを記録する。
+Claude API でプロンプト用の分析テキストを生成して Slack に通知する。
 火・金 08:00 JST に実行。
 """
 
@@ -9,8 +9,8 @@ import os
 import json
 import datetime
 import anthropic
-from sheets import get_recent_competitor_posts, append_competitor_record, mark_competitor_posts_analyzed
-
+from sheets import get_recent_competitor_posts, mark_competitor_posts_analyzed
+from notify_slack import notify_slack_report
 
 STRATEGY_PATH = os.path.join(os.path.dirname(__file__), "../config/strategy.json")
 
@@ -74,15 +74,15 @@ def _build_posts_text(posts: list[dict]) -> str:
     return "\n\n".join(blocks)
 
 
-def analyze_with_claude(posts: list[dict], strategy: dict) -> dict:
-    """Claude API で競合投稿を集計分析し、サマリーを返す"""
+def analyze_with_claude(posts: list[dict], strategy: dict) -> str:
+    """Claude API で競合投稿を分析し、AI に渡すプロンプト用テキストを返す"""
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
     posts_text = _build_posts_text(posts)
 
     if not posts_text.strip():
         print("[競合分析] 本文のある投稿がないためスキップ")
-        return {}
+        return ""
 
     positioning = strategy.get("positioning", {})
 
@@ -99,14 +99,19 @@ def analyze_with_claude(posts: list[dict], strategy: dict) -> dict:
 {posts_text}
 
 【出力形式】
-JSON形式のみで出力してください（前後の説明文は不要）：
-{{
-  "top_posts": "エンゲージメント上位3件の共通点・要約（300字以内）",
-  "avg_engagement_rate": いいね+リプライの合計を投稿数で割った数値（小数点2桁）,
-  "dominant_themes": "頻出テーマ・キーワード（カンマ区切り、5件程度）",
-  "positioning_gap": "自社ポジションとの差分・競合が取れていない空白地帯（300字以内）",
-  "thread_analysis": "スレッド投稿の構成パターン分析。何投稿構成か・各リプライの役割・どの構成が高エンゲージメントかを具体的に記述（300字以内）。スレッド投稿がない場合は空文字"
-}}
+以下の構造でプレーンテキストのみ出力してください（コードブロック・装飾記号不要）：
+
+■ 高エンゲージメント投稿の傾向
+（エンゲージメント上位3件の共通点・要約を300字以内で）
+
+■ 頻出テーマ・キーワード
+（カンマ区切り、5件程度）
+
+■ 自社との差分・空白地帯
+（自社ポジションとの差分・競合が取れていない空白地帯を300字以内で）
+
+■ スレッド構成パターン
+（スレッド投稿がある場合のみ。何投稿構成か・各リプライの役割・どの構成が高エンゲージメントかを300字以内で。なければこの項目ごと省略）
 
 【文字数】全体で約1200文字を目安にすること"""
 
@@ -116,30 +121,10 @@ JSON形式のみで出力してください（前後の説明文は不要）：
         messages=[{"role": "user", "content": prompt}],
     )
 
-    raw = message.content[0].text.strip()
-    if "```json" in raw:
-        raw = raw.split("```json")[1].split("```")[0].strip()
-    elif "```" in raw:
-        raw = raw.split("```")[1].split("```")[0].strip()
-
-    try:
-        return json.loads(raw)
-    except Exception as e:
-        print(f"[競合分析] Claude分析のJSON解析失敗: {e}")
-        return {
-            "top_posts": raw[:300],
-            "avg_engagement_rate": 0.0,
-            "dominant_themes": "",
-            "positioning_gap": "",
-            "thread_analysis": "",
-        }
+    return message.content[0].text.strip()
 
 
 def main():
-    now = datetime.datetime.now(
-        datetime.timezone(datetime.timedelta(hours=9))
-    ).isoformat()
-
     # 競合投稿DBから未分析の投稿のみ取得
     posts = get_recent_competitor_posts(unanalyzed_only=True)
     if not posts:
@@ -149,19 +134,12 @@ def main():
     print(f"[競合分析] 未分析投稿数: {len(posts)}件")
     strategy = load_strategy()
 
-    analysis = analyze_with_claude(posts, strategy)
-    if not analysis:
+    result = analyze_with_claude(posts, strategy)
+    if not result:
         return
 
-    append_competitor_record({
-        "top_posts": analysis.get("top_posts", ""),
-        "avg_engagement_rate": analysis.get("avg_engagement_rate", 0.0),
-        "dominant_themes": analysis.get("dominant_themes", ""),
-        "positioning_gap": analysis.get("positioning_gap", ""),
-        "thread_analysis": analysis.get("thread_analysis", ""),
-        "collected_at": now,
-    })
-    print("[競合分析] 集計分析を競合分析DBに記録しました")
+    print(f"[競合分析] 分析完了:\n{result}")
+    notify_slack_report(result, title="競合分析レポート", body=result)
 
     # 分析済みフラグを立てる
     row_numbers = [p["_row"] for p in posts]

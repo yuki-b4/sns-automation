@@ -101,25 +101,21 @@ sns-automation/
 ### Flow 3：Competitor Analysis（火・金 08:00 JST）
 
 ```
-1. Google Sheets「競合投稿DB」から直近14日分の手動入力データを取得
+1. Google Sheets「競合投稿DB」から未分析（analyzed が空）の手動入力データを取得
    ※ 競合の投稿は Threads API では取得不可のため手動入力
-   ※ 入力カラム：content / likes / replies / posted_at / thread_id / reply_order
+   ※ 入力カラム：content / likes / replies / posted_at / thread_id / reply_order / analyzed
    ※ thread_id：同じスレッドに同じ値を振る（スタンドアロン投稿は空欄）
    ※ reply_order：ルートが 0、リプライが 1/2/3…（スタンドアロン投稿は空欄）
    ※ analyzed：分析済みで TRUE、未入力 = 未分析。分析スクリプト実行後に自動でマークされる
-2. competitor_id ごとにグループ化
-3. Claude API（claude-opus-4-6）で競合投稿を集計分析
-   - top_posts：エンゲージメント上位3件の共通点・要約
-   - avg_engagement_rate：(いいね+リプライ)/投稿数 の近似値
-   - dominant_themes：頻出テーマ・キーワード
-   - positioning_gap：自分のポジションとの差分・空白地帯
-4. Google Sheets「競合分析DB」に集計サマリー行を記録
+2. 未分析投稿がなければ終了
+3. Claude API（claude-opus-4-6）でプロンプト用の分析テキストを生成
+   - 高エンゲージメント投稿の傾向
+   - 頻出テーマ・キーワード
+   - 自社との差分・空白地帯
+   - スレッド構成パターン（スレッド投稿がある場合のみ）
+4. Slack に分析テキストを直接通知（AI への入力プロンプトとして利用可能な形式）
+5. 分析済み投稿の analyzed カラムを TRUE にマーク
 ```
-
-**フィードバックサイクル：**
-- 「競合投稿DB」に競合の投稿内容・いいね・リプライを手動入力することで、
-  週次レポートで「どんな構成・内容が競合でエンゲージメントを取っているか」を
-  Claude に分析させ、自社の投稿内容構成の改善に活用できる。
 
 ---
 
@@ -127,7 +123,7 @@ sns-automation/
 
 ```
 1. Google Sheetsから過去7日分の投稿DB・メトリクスDBを取得
-2. Google Sheetsから競合分析DBの直近データを取得
+2. Google Sheets「競合投稿DB」から直近14日分の投稿サンプルを取得
 3. 投稿タイプ別のエンゲージメント率・インプレッションを集計
 4. Claude API（claude-opus-4-6）に統合分析をリクエスト
    - 自社データ＋競合データを渡す
@@ -147,7 +143,7 @@ sns-automation/
 |---|---|---|
 | 投稿DB | 全投稿の記録 | post_id / platform / post_type / content / posted_at / week_number |
 | メトリクスDB | エンゲージメントデータ | post_id / collected_at / likes / reposts / replies / impressions / engagement_rate |
-| 競合分析DB | 競合の集計サマリー | top_posts / avg_engagement_rate / dominant_themes / positioning_gap / thread_analysis / collected_at |
+| 競合投稿DB（分析結果） | Slack 直接通知のためシート不使用 | - |
 | 競合投稿DB | 競合の投稿単位データ（手動入力） | content / likes / replies / posted_at / thread_id / reply_order / analyzed |
 | 競合アカウント | 分析対象の競合リスト | account_id |
 

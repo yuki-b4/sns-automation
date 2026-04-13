@@ -84,24 +84,6 @@ def bulk_upsert_metrics_records(records: list[dict]) -> None:
         sheet.append_rows(to_append, value_input_option="RAW")
 
 
-def append_competitor_record(record: dict) -> None:
-    """競合分析DBにレコードを追加（集計サマリー行）"""
-    if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
-        print("[Sheets] 認証情報が未設定のためスキップ")
-        return
-
-    client = get_client()
-    sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("競合分析DB")
-    row = [
-        record.get("top_posts", ""),
-        record.get("avg_engagement_rate", 0.0),
-        record.get("dominant_themes", ""),
-        record.get("positioning_gap", ""),
-        record.get("thread_analysis", ""),
-        record.get("collected_at", ""),
-    ]
-    sheet.append_row(row)
-
 
 
 def get_recent_competitor_posts(days: int = 14, unanalyzed_only: bool = False) -> list[dict]:
