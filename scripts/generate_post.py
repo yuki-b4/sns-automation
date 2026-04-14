@@ -7,6 +7,7 @@ ThreadsへAutomatic投稿、投稿内容をSlack通知する
 
 import os
 import json
+import time
 import datetime
 import anthropic
 from preflight import run_all as preflight_check
@@ -187,12 +188,14 @@ def main():
     # セルフリプライ1投稿（投稿成功かつ補足リプライがある場合）
     reply_id = None
     if threads_id and self_reply:
+        time.sleep(5)  # 本文投稿がThreads側で処理されるのを待つ
         reply_id = post_to_threads(self_reply, reply_to_id=threads_id)
         if reply_id:
             print(f"[Threads] セルフリプライ1投稿成功: {reply_id}")
 
     # セルフリプライ2投稿（structure 3投稿構成）
     if reply_id and self_reply2:
+        time.sleep(5)  # セルフリプライ1がThreads側で処理されるのを待つ
         reply2_id = post_to_threads(self_reply2, reply_to_id=reply_id)
         if reply2_id:
             print(f"[Threads] セルフリプライ2投稿成功: {reply2_id}")
