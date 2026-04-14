@@ -37,7 +37,7 @@ def post_to_threads(content: str, reply_to_id: str | None = None) -> str | None:
     container_id = create_data["id"]
 
     # Step 2: 公開（コンテナ処理完了を待ってから公開）
-    time.sleep(2)
+    time.sleep(5)
     publish_url = f"{BASE_URL}/{THREADS_USER_ID}/threads_publish"
     publish_resp = requests.post(publish_url, params={
         "creation_id": container_id,
