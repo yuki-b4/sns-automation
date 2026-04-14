@@ -5,6 +5,7 @@
 """
 
 import os
+import sys
 import time
 import datetime
 from post_threads import post_to_threads
@@ -40,7 +41,7 @@ def main():
     threads_id = post_to_threads(PINNED_CONTENT)
     if not threads_id:
         print("[ピン留め投稿] 本文投稿失敗。処理を中断します。")
-        return
+        sys.exit(1)
 
     # リプライ投稿
     reply_id = None
