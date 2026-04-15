@@ -17,6 +17,7 @@ from notify_slack import notify_slack_note
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 STRATEGY_PATH = os.path.join(SCRIPT_DIR, "../config/strategy.json")
+NOTE_GUIDE_PATH = os.path.join(SCRIPT_DIR, "../config/note_writing_guide.json")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "../output/notes")
 
 # 5テーマのローテーション（day_of_year % 5 で決定）
@@ -34,12 +35,60 @@ def load_strategy() -> dict:
         return json.load(f)
 
 
+def load_writing_guide() -> dict:
+    with open(NOTE_GUIDE_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def format_writing_guide(guide: dict) -> str:
+    """note執筆ガイドをプロンプト注入用テキストに変換"""
+    lines = []
+
+    # タイトル法則
+    lines.append("【タイトルの法則】")
+    for p in guide["title_rules"]["patterns"]:
+        lines.append(f"- {p['type']}：{p['example']}（{p['note']}）")
+    lines.append(f"避けること：{' / '.join(guide['title_rules']['avoid'])}")
+
+    # 冒頭フック
+    lines.append("\n【冒頭フックの型（最初の100字以内）】")
+    for p in guide["opening_hook_rules"]["patterns"]:
+        lines.append(f"- {p['type']}：{p['example']}")
+    lines.append("ルール：" + " / ".join(guide["opening_hook_rules"]["rules"]))
+
+    # 課題提示
+    lines.append("\n【課題提示の型】")
+    for p in guide["problem_presentation_rules"]["patterns"]:
+        lines.append(f"- {p['type']}：{p['point']}")
+        lines.append(f"  例：{p['example']}")
+
+    # 解決法提示
+    lines.append("\n【解決法提示の型】")
+    for p in guide["solution_presentation_rules"]["patterns"]:
+        lines.append(f"- {p['type']}：{p['point']}")
+        lines.append(f"  例：{p['example']}")
+    lines.append(f"避けること：{' / '.join(guide['solution_presentation_rules']['avoid'])}")
+
+    # 構成テンプレート
+    tmpl = guide["engagement_principles"]["structure_template"]
+    lines.append(f"\n【推奨構成テンプレート】")
+    for s in tmpl["sections"]:
+        lines.append(f"  {s}")
+
+    # いいね原則
+    lines.append("\n【いいねを増やす5原則】")
+    for p in guide["engagement_principles"]["principles"]:
+        lines.append(f"- {p['name']}：{p['detail']}")
+
+    return "\n".join(lines)
+
+
 def determine_theme() -> tuple[str, str]:
     day_of_year = datetime.date.today().timetuple().tm_yday
     return NOTE_THEMES[day_of_year % len(NOTE_THEMES)]
 
 
-def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label: str, theme_desc: str) -> str:
+def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label: str, theme_desc: str, writing_guide: str) -> str:
     positioning = strategy["positioning"]
     persona = strategy["persona"]
 
@@ -49,7 +98,7 @@ def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label
     ])
 
     return f"""あなたはnoteのコンテンツライターです。
-以下の戦略とThreads投稿履歴を参考に、ペルソナに向けた無料note記事を生成してください。
+以下の戦略・執筆ガイド・Threads投稿履歴を参考に、ペルソナに向けた無料note記事を生成してください。
 
 【ポジショニング】
 - ポジション：{positioning["position"]}
@@ -67,6 +116,9 @@ def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label
 【過去7日のThreads投稿（参考・発展のベースにする）】
 {posts_text if posts_text else "（参考投稿なし）"}
 
+【note執筆ガイド（タイトル・フック・課題提示・解決法・構成の原則）】
+{writing_guide}
+
 【記事の目的】
 - セールスファネルの入口として機能する（SNS → 無料note → 有料コンテンツ）
 - ペルソナの悩みに共感し、考え方・手法の入口を示すことで「この人の有料コンテンツも読みたい」と思わせる
@@ -74,7 +126,6 @@ def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label
 
 【ルール】
 - 文字数：1200〜1500字程度
-- 構成：キャッチーなタイトル → リード文（共感・問題提起） → 本文3〜4章（見出し付き） → CTA（有料コンテンツへの自然な誘導）
 - 見出しは ## で記述（Markdown形式）
 - 専門的だが親しみやすいトーン。精神論・根性論ではなく設計・仕組みの視点
 - CTAは「〜についてはこちらで詳しく書いています」などの自然な形にし、直接的な売り込みはしない
@@ -90,12 +141,12 @@ def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label
 （ここにMarkdown形式の本文）"""
 
 
-def build_paid_note_prompt(strategy: dict, theme_label: str, theme_desc: str) -> str:
+def build_paid_note_prompt(strategy: dict, theme_label: str, theme_desc: str, writing_guide: str) -> str:
     positioning = strategy["positioning"]
     persona = strategy["persona"]
 
     return f"""あなたはnoteのコンテンツライターです。
-以下の戦略に基づいて、ペルソナ向けの有料note記事（¥1,980相当）を生成してください。
+以下の戦略・執筆ガイドに基づいて、ペルソナ向けの有料note記事（¥1,980相当）を生成してください。
 
 【ポジショニング】
 - ポジション：{positioning["position"]}
@@ -111,6 +162,9 @@ def build_paid_note_prompt(strategy: dict, theme_label: str, theme_desc: str) ->
 【テーマ】
 {theme_label}：{theme_desc}
 
+【note執筆ガイド（タイトル・フック・課題提示・解決法・構成の原則）】
+{writing_guide}
+
 【記事の目的】
 - ¥1,980の有料noteとして十分な具体的価値を提供する
 - 「読んだだけで行動が変わった」と感じさせる再現性の高い手法を提供
@@ -118,7 +172,6 @@ def build_paid_note_prompt(strategy: dict, theme_label: str, theme_desc: str) ->
 
 【ルール】
 - 文字数：2500〜3500字程度
-- 構成：タイトル → リード → 問題の構造的定義 → メソッド解説（3〜5ステップ、根拠付き） → 実践ガイド → まとめ
 - 見出しは ## / ### で記述（Markdown形式）
 - 心理学・脳科学の根拠を最低1つ含める
 - 具体的な数字・事例を盛り込む（「〇分」「〇件削減」「〇週間で」など）
@@ -163,6 +216,8 @@ def save_note(title: str, body: str, mode: str, date_str: str) -> str:
 def main():
     mode = os.environ.get("MODE", "free").lower()
     strategy = load_strategy()
+    guide = load_writing_guide()
+    writing_guide = format_writing_guide(guide)
     theme_label, theme_desc = determine_theme()
 
     # 過去7日のThreads投稿を取得（freeモードのみ）
@@ -176,10 +231,10 @@ def main():
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
     if mode == "free":
-        prompt = build_free_note_prompt(strategy, recent_posts, theme_label, theme_desc)
+        prompt = build_free_note_prompt(strategy, recent_posts, theme_label, theme_desc, writing_guide)
         max_tokens = 2500
     else:
-        prompt = build_paid_note_prompt(strategy, theme_label, theme_desc)
+        prompt = build_paid_note_prompt(strategy, theme_label, theme_desc, writing_guide)
         max_tokens = 5000
 
     print(f"[generate_note] モード: {mode} / テーマ: {theme_label} / Claude API 呼び出し中...")
