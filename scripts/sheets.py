@@ -41,6 +41,63 @@ def append_post_record(record: dict) -> None:
     print(f"[Sheets] 投稿DB記録: {record['platform']} / {record['post_id']}")
 
 
+def append_note_record(record: dict) -> None:
+    """note投稿DBにレコードを追加（シート名: note投稿DB）
+    列構成: note_id | type | title | price | file_path | generated_at | posted_at | status
+          | combination_pattern | title_type | hook_type | problem_type | solution_type
+          | ref_threads_post_ids | views | likes | comments | selling_elements
+    """
+    if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
+        print("[Sheets] 認証情報が未設定のためスキップ")
+        return
+
+    client = get_client()
+    sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("note投稿DB")
+    row = [
+        "",                                           # A: note_id（投稿後に手動入力）
+        record.get("type", ""),                      # B: free / paid
+        record.get("title", ""),                     # C: 記事タイトル
+        record.get("price", 0),                      # D: 0 or 1980
+        record.get("file_path", ""),                 # E: output/notes/YYYY-MM-DD_free.md
+        record.get("generated_at", ""),              # F: 生成日時（ISO形式）
+        "",                                           # G: posted_at（投稿後に手動入力）
+        record.get("status", "draft"),               # H: draft / posted
+        record.get("combination_pattern", ""),       # I: 共感最大化 など
+        record.get("title_type", ""),                # J: 共感直球型 など
+        record.get("hook_type", ""),                 # K: 失敗談型 など
+        record.get("problem_type", ""),              # L: ビフォー描写型 など
+        record.get("solution_type", ""),             # M: Before/After型 など
+        record.get("ref_threads_post_ids", ""),      # N: 参照したThreads投稿IDのカンマ区切り
+        "",                                           # O: views（手動入力）
+        "",                                           # P: likes（手動入力）
+        "",                                           # Q: comments（手動入力）
+        record.get("selling_element_ids", ""),       # R: 選択した売れる要素IDのカンマ区切り（paidのみ）
+    ]
+    sheet.append_row(row, value_input_option="RAW")
+    print(f"[Sheets] note投稿DB記録: {record.get('type')} / {record.get('combination_pattern')} / {record.get('title')}")
+
+
+def get_note_records(weeks: int = 4) -> list[dict]:
+    """note投稿DBから過去N週分のレコードを返す（週次分析用）"""
+    if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
+        return []
+
+    import datetime
+    client = get_client()
+    sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("note投稿DB")
+    records = sheet.get_all_records()
+
+    cutoff = datetime.datetime.now(
+        datetime.timezone(datetime.timedelta(hours=9))
+    ) - datetime.timedelta(weeks=weeks)
+
+    result = []
+    for r in records:
+        if _is_recent(r.get("generated_at", ""), cutoff):
+            result.append(r)
+    return result
+
+
 def bulk_upsert_metrics_records(records: list[dict]) -> None:
     """メトリクスDBのレコードを一括upsert（読み取り1回・post_idで末尾行を上書き）"""
     if not records:

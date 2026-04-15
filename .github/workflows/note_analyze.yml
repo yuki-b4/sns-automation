@@ -1,0 +1,32 @@
+name: Analyze Note Performance
+
+on:
+  schedule:
+    - cron: '0 1 * * 1'  # UTC 01:00 月曜 = JST 10:00 月曜（日曜の週を振り返る）
+  workflow_dispatch:
+
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Run note performance analysis
+        run: python scripts/analyze_note_performance.py
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          GOOGLE_SHEETS_ID: ${{ secrets.GOOGLE_SHEETS_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      - name: Commit and push analysis report
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/reports/
+          git diff --staged --quiet || git commit -m "chore: weekly note analysis report $(date +%Y-%m-%d)"
+          git push
