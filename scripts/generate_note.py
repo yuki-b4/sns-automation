@@ -192,8 +192,7 @@ def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label
         for p in recent_posts[:15]
     ])
 
-    return f"""あなたはnoteのコンテンツライターです。
-以下の戦略・執筆ガイド・Threads投稿履歴を参考に、ペルソナに向けた無料note記事を生成してください。
+    return f"""以下の戦略・執筆ガイド・Threads投稿履歴を必ず参考に、ペルソナに向けた無料note記事を生成してください。
 
 【ポジショニング】
 - ポジション：{positioning["position"]}
@@ -243,8 +242,7 @@ def build_paid_note_prompt(strategy: dict, theme_label: str, theme_desc: str, wr
     persona = strategy["persona"]
     selling_elements = format_selling_elements(guide)
 
-    return f"""あなたはnoteのコンテンツライターです。
-以下の戦略・執筆ガイドに基づいて、ペルソナ向けの有料note記事（¥1,980相当）を生成してください。
+    return f"""以下の戦略・執筆ガイドに基づいて、ペルソナ向けの有料note記事（¥1,980相当）を生成してください。
 
 【ポジショニング】
 - ポジション：{positioning["position"]}
