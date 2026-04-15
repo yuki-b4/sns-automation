@@ -84,6 +84,15 @@ def format_writing_guide(guide: dict) -> str:
     return "\n".join(lines)
 
 
+# Threads post_type → 表示ラベル（プロンプト内で使用）
+_POST_TYPE_LABELS = {
+    "permission": "許可系（罪悪感・後ろめたさへの共感メッセージ）",
+    "structure":  "体系化系（仕組み・設計・手順を構造的に伝える投稿）",
+    "personal":   "自己開示系（著者自身の失敗・経験・変化のプロセス）",
+    "opinion":    "業界考察系（働き方・残業文化などを設計視点で分析）",
+    "dialogue":   "対話系（読者への問いかけ・エンゲージメント促進）",
+}
+
 # Threads post_type → note combination index のマッピング
 # 「最も反応が高かった投稿の種類」からnote記事の方向性を決定する
 _POST_TYPE_TO_COMBINATION_INDEX = {
@@ -199,12 +208,13 @@ def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label
             seen_types.append(pt)
         if len(seen_types) >= 3:
             break
+    top_labels = [_POST_TYPE_LABELS.get(t, t) for t in seen_types]
     top_types_header = (
-        f"（エンゲージメント上位の投稿タイプ: {' > '.join(seen_types)} の順）\n"
-        if seen_types else ""
+        f"（エンゲージメント上位の投稿タイプ: {' > '.join(top_labels)} の順）\n"
+        if top_labels else ""
     )
     posts_text = top_types_header + "\n".join(
-        f"- [{p.get('post_type','')}] {p.get('content','')}"
+        f"- [{_POST_TYPE_LABELS.get(p.get('post_type',''), p.get('post_type',''))}] {p.get('content','')}"
         for p in recent_posts[:15]
     )
 
