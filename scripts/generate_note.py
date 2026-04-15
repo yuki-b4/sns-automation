@@ -83,12 +83,30 @@ def format_writing_guide(guide: dict) -> str:
     return "\n".join(lines)
 
 
-def determine_theme() -> tuple[str, str]:
+def determine_theme_and_combination(guide: dict) -> tuple[str, str, dict]:
+    """テーマとその日の組み合わせパターンを返す（5日周期ローテーション）"""
     day_of_year = datetime.date.today().timetuple().tm_yday
-    return NOTE_THEMES[day_of_year % len(NOTE_THEMES)]
+    theme_index = day_of_year % len(NOTE_THEMES)
+    theme_label, theme_desc = NOTE_THEMES[theme_index]
+    combination = guide["combination_patterns"]["patterns"][theme_index]
+    return theme_label, theme_desc, combination
 
 
-def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label: str, theme_desc: str, writing_guide: str) -> str:
+def format_combination_instruction(combination: dict) -> str:
+    """組み合わせパターンをプロンプト注入用テキストに変換"""
+    inst = combination["instructions"]
+    return f"""【今回の組み合わせパターン：{combination['name']}（目標：{combination['target_goal']}）】
+必ず以下の4型を組み合わせて記事を書いてください。
+
+- タイトル → {combination['title_type']}：{inst['title']}
+- 冒頭フック（最初の100字）→ {combination['hook_type']}：{inst['hook']}
+- 課題提示 → {combination['problem_type']}：{inst['problem']}
+- 解決法 → {combination['solution_type']}：{inst['solution']}
+
+この組み合わせの相乗効果：{combination['synergy']}"""
+
+
+def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label: str, theme_desc: str, writing_guide: str, combination: dict) -> str:
     positioning = strategy["positioning"]
     persona = strategy["persona"]
 
@@ -113,10 +131,12 @@ def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label
 【今日のテーマ】
 {theme_label}：{theme_desc}
 
+{format_combination_instruction(combination)}
+
 【過去7日のThreads投稿（参考・発展のベースにする）】
 {posts_text if posts_text else "（参考投稿なし）"}
 
-【note執筆ガイド（タイトル・フック・課題提示・解決法・構成の原則）】
+【note執筆ガイド（型の詳細定義）】
 {writing_guide}
 
 【記事の目的】
@@ -141,7 +161,7 @@ def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label
 （ここにMarkdown形式の本文）"""
 
 
-def build_paid_note_prompt(strategy: dict, theme_label: str, theme_desc: str, writing_guide: str) -> str:
+def build_paid_note_prompt(strategy: dict, theme_label: str, theme_desc: str, writing_guide: str, combination: dict) -> str:
     positioning = strategy["positioning"]
     persona = strategy["persona"]
 
@@ -162,7 +182,9 @@ def build_paid_note_prompt(strategy: dict, theme_label: str, theme_desc: str, wr
 【テーマ】
 {theme_label}：{theme_desc}
 
-【note執筆ガイド（タイトル・フック・課題提示・解決法・構成の原則）】
+{format_combination_instruction(combination)}
+
+【note執筆ガイド（型の詳細定義）】
 {writing_guide}
 
 【記事の目的】
@@ -218,26 +240,30 @@ def main():
     strategy = load_strategy()
     guide = load_writing_guide()
     writing_guide = format_writing_guide(guide)
-    theme_label, theme_desc = determine_theme()
+    theme_label, theme_desc, combination = determine_theme_and_combination(guide)
 
     # 過去7日のThreads投稿を取得（freeモードのみ）
+    # 取得した投稿はnote記事の参照元として使い、週次分析でもどのThreads投稿が
+    # ベースになったかを追跡できるよう post_ids を記録する
     recent_posts = []
+    ref_post_ids = ""
     if mode == "free":
         data = get_weekly_data(days=7)
         recent_posts = data.get("posts", [])
+        ref_post_ids = ",".join(p.get("post_id", "") for p in recent_posts if p.get("post_id"))
         print(f"[generate_note] 参照Threads投稿: {len(recent_posts)}件")
 
     # Claude API で記事生成
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
     if mode == "free":
-        prompt = build_free_note_prompt(strategy, recent_posts, theme_label, theme_desc, writing_guide)
+        prompt = build_free_note_prompt(strategy, recent_posts, theme_label, theme_desc, writing_guide, combination)
         max_tokens = 2500
     else:
-        prompt = build_paid_note_prompt(strategy, theme_label, theme_desc, writing_guide)
+        prompt = build_paid_note_prompt(strategy, theme_label, theme_desc, writing_guide, combination)
         max_tokens = 5000
 
-    print(f"[generate_note] モード: {mode} / テーマ: {theme_label} / Claude API 呼び出し中...")
+    print(f"[generate_note] モード: {mode} / テーマ: {theme_label} / パターン: {combination['name']} / Claude API 呼び出し中...")
     message = client.messages.create(
         model="claude-opus-4-6",
         max_tokens=max_tokens,
@@ -266,7 +292,7 @@ def main():
     # Slack通知（タイトル + GitHub URL のみ、本文は含めない）
     notify_slack_note(title, mode, github_url)
 
-    # Google Sheetsに記録
+    # Google Sheetsに記録（組み合わせパターン情報も含む）
     append_note_record({
         "type": mode,
         "title": title,
@@ -274,6 +300,12 @@ def main():
         "file_path": rel_path,
         "generated_at": now_jst.isoformat(),
         "status": "draft",
+        "combination_pattern": combination["name"],
+        "title_type": combination["title_type"],
+        "hook_type": combination["hook_type"],
+        "problem_type": combination["problem_type"],
+        "solution_type": combination["solution_type"],
+        "ref_threads_post_ids": ref_post_ids,
     })
 
     print("[generate_note] 完了")
