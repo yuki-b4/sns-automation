@@ -12,6 +12,7 @@ import os
 import json
 import datetime
 import anthropic
+from collections import defaultdict
 from sheets import get_weekly_data, append_note_record
 from notify_slack import notify_slack_note
 
@@ -83,13 +84,76 @@ def format_writing_guide(guide: dict) -> str:
     return "\n".join(lines)
 
 
-def determine_theme_and_combination(guide: dict) -> tuple[str, str, dict]:
-    """テーマとその日の組み合わせパターンを返す（5日周期ローテーション）"""
+# Threads post_type → note combination index のマッピング
+# 「最も反応が高かった投稿の種類」からnote記事の方向性を決定する
+_POST_TYPE_TO_COMBINATION_INDEX = {
+    "structure":  1,  # 体系化系  → 信頼構築（数字×根拠）
+    "opinion":    4,  # 業界考察系 → 知的好奇心（逆説×設計図）
+    "personal":   0,  # 自己開示系 → 共感最大化（失敗談×Before/After）
+    "permission": 0,  # 許可系    → 共感最大化（感情共鳴）
+    "dialogue":   3,  # 対話系    → ファン化（場面描写×プロトコル）
+}
+
+
+def annotate_posts_with_metrics(posts: list[dict], metrics: list[dict]) -> list[dict]:
+    """投稿リストにメトリクス情報を付加してエンゲージメント率の高い順にソート"""
+    metrics_map = {str(m.get("post_id", "")): m for m in metrics}
+    annotated = []
+    for post in posts:
+        m = metrics_map.get(str(post.get("post_id", "")), {})
+        annotated.append({
+            **post,
+            "_engagement_rate": float(m.get("engagement_rate", 0) or 0),
+            "_likes": int(m.get("likes", 0) or 0),
+            "_impressions": int(m.get("impressions", 0) or 0),
+        })
+    return sorted(annotated, key=lambda p: p["_engagement_rate"], reverse=True)
+
+
+def determine_theme_and_combination(
+    guide: dict,
+    posts: list[dict] | None = None,
+    metrics: list[dict] | None = None,
+) -> tuple[str, str, dict, str]:
+    """テーマと組み合わせパターンを決定する。
+    メトリクスデータがあればエンゲージメント上位のpost_typeに基づき選択し、
+    データ不足の場合はday_of_yearローテーションにフォールバックする。
+    Returns: (theme_label, theme_desc, combination, selection_reason)
+    """
+    if posts and metrics:
+        # post_type別の平均エンゲージメント率を計算
+        type_scores: dict[str, list[float]] = defaultdict(list)
+        metrics_map = {str(m.get("post_id", "")): m for m in metrics}
+        for post in posts:
+            pt = post.get("post_type", "")
+            m = metrics_map.get(str(post.get("post_id", "")), {})
+            rate = float(m.get("engagement_rate", 0) or 0)
+            if pt and rate > 0:
+                type_scores[pt].append(rate)
+
+        if type_scores:
+            avg_by_type = {pt: sum(v) / len(v) for pt, v in type_scores.items()}
+            best_type = max(avg_by_type, key=lambda t: avg_by_type[t])
+            best_avg = avg_by_type[best_type]
+            combo_index = _POST_TYPE_TO_COMBINATION_INDEX.get(
+                best_type, datetime.date.today().timetuple().tm_yday % len(NOTE_THEMES)
+            )
+            theme_label, theme_desc = NOTE_THEMES[combo_index]
+            combination = guide["combination_patterns"]["patterns"][combo_index]
+            reason = (
+                f"エンゲージメント最高post_type: {best_type} "
+                f"(avg {best_avg:.2%}, {len(type_scores[best_type])}件) "
+                f"→ {combination['name']}パターンを選択"
+            )
+            return theme_label, theme_desc, combination, reason
+
+    # フォールバック: day_of_yearローテーション
     day_of_year = datetime.date.today().timetuple().tm_yday
     theme_index = day_of_year % len(NOTE_THEMES)
     theme_label, theme_desc = NOTE_THEMES[theme_index]
     combination = guide["combination_patterns"]["patterns"][theme_index]
-    return theme_label, theme_desc, combination
+    reason = f"メトリクスデータなし → ローテーション({theme_index}番目)を使用: {theme_label}"
+    return theme_label, theme_desc, combination, reason
 
 
 def format_combination_instruction(combination: dict) -> str:
@@ -106,12 +170,25 @@ def format_combination_instruction(combination: dict) -> str:
 この組み合わせの相乗効果：{combination['synergy']}"""
 
 
+def format_selling_elements(guide: dict) -> str:
+    """有料note 売れる要素チェックリストをプロンプト注入用テキストに変換"""
+    elements = guide["paid_note_selling_elements"]["elements"]
+    required = guide["paid_note_selling_elements"]["required_count"]
+    lines = [f"（必ず{required}個以上含めること）"]
+    for e in elements:
+        lines.append(f"{e['id']}. 【{e['name']}】{e['description']}  ／ 配置推奨: {e['placement']}  ／ 例: {e['example']}")
+    return "\n".join(lines)
+
+
 def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label: str, theme_desc: str, writing_guide: str, combination: dict) -> str:
     positioning = strategy["positioning"]
     persona = strategy["persona"]
 
+    # エンゲージメントデータを表示（あれば高い順、なければ通常表示）
     posts_text = "\n".join([
-        f"- [{p.get('post_type', '')}] {p.get('content', '')}"
+        f"- [{p.get('post_type','')} / エンゲージ:{p.get('_engagement_rate',0):.1%} / いいね:{p.get('_likes',0)}] {p.get('content','')}"
+        if p.get("_engagement_rate", 0) > 0
+        else f"- [{p.get('post_type','')}] {p.get('content','')}"
         for p in recent_posts[:15]
     ])
 
@@ -161,9 +238,10 @@ def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label
 （ここにMarkdown形式の本文）"""
 
 
-def build_paid_note_prompt(strategy: dict, theme_label: str, theme_desc: str, writing_guide: str, combination: dict) -> str:
+def build_paid_note_prompt(strategy: dict, theme_label: str, theme_desc: str, writing_guide: str, combination: dict, guide: dict) -> str:
     positioning = strategy["positioning"]
     persona = strategy["persona"]
+    selling_elements = format_selling_elements(guide)
 
     return f"""あなたはnoteのコンテンツライターです。
 以下の戦略・執筆ガイドに基づいて、ペルソナ向けの有料note記事（¥1,980相当）を生成してください。
@@ -187,6 +265,9 @@ def build_paid_note_prompt(strategy: dict, theme_label: str, theme_desc: str, wr
 【note執筆ガイド（型の詳細定義）】
 {writing_guide}
 
+【有料note 売れる要素チェックリスト】
+{selling_elements}
+
 【記事の目的】
 - ¥1,980の有料noteとして十分な具体的価値を提供する
 - 「読んだだけで行動が変わった」と感じさせる再現性の高い手法を提供
@@ -195,10 +276,10 @@ def build_paid_note_prompt(strategy: dict, theme_label: str, theme_desc: str, wr
 【ルール】
 - 文字数：2500〜3500字程度
 - 見出しは ## / ### で記述（Markdown形式）
-- 心理学・脳科学の根拠を最低1つ含める
-- 具体的な数字・事例を盛り込む（「〇分」「〇件削減」「〇週間で」など）
+- 心理学・脳科学の根拠を最低1つ含める（要素4）
+- 具体的な数字・事例を盛り込む（「〇分」「〇件削減」「〇週間で」など）（要素6）
 - 「できる人vsできない人」型の対比フォーマットは使わない
-- CTAは無料コーチング体験や次の有料コンテンツへの自然な誘導
+- CTAは上位商材への低圧力な自然な誘導（要素12）
 
 以下の形式で出力してください（他の説明・前置き不要）：
 
@@ -206,29 +287,46 @@ def build_paid_note_prompt(strategy: dict, theme_label: str, theme_desc: str, wr
 （ここにタイトル）
 
 【本文】
-（ここにMarkdown形式の本文）"""
+（ここにMarkdown形式の本文）
+
+【売れる要素チェック】
+（各要素について ✅ 含まれている / ❌ 含まれていない を記載。含まれていない場合は改善案を1行で添えること。）
+例: ✅ 1.ターゲット明示: リード文「30代エンジニア・PM」に明記
+例: ❌ 11.価格正当化: 未記載 → まとめ章に「3種のプロトコル＋チェックリスト」の記述を追加推奨"""
 
 
 def parse_note(raw: str) -> dict:
-    """生成テキストをタイトルと本文に分割"""
+    """生成テキストをタイトル・本文・売れる要素チェック（有料noteのみ）に分割"""
     title = ""
     body = ""
+    checklist = ""
+
     if "【タイトル】" in raw and "【本文】" in raw:
+        # 売れる要素チェックが含まれる場合（有料noteモード）
+        if "【売れる要素チェック】" in raw:
+            parts_check = raw.split("【売れる要素チェック】", 1)
+            checklist = parts_check[1].strip()
+            raw = parts_check[0]
+
         parts = raw.split("【本文】", 1)
         title = parts[0].replace("【タイトル】", "").strip()
         body = parts[1].strip()
     else:
         body = raw
-    return {"title": title, "body": body}
+
+    return {"title": title, "body": body, "checklist": checklist}
 
 
-def save_note(title: str, body: str, mode: str, date_str: str) -> str:
-    """Markdownファイルとして保存し、ファイルパスを返す"""
+def save_note(title: str, body: str, mode: str, date_str: str, checklist: str = "") -> str:
+    """Markdownファイルとして保存し、ファイルパスを返す。
+    有料noteの場合は売れる要素チェックをファイル末尾に付記する。"""
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     filename = f"{date_str}_{mode}.md"
     filepath = os.path.join(OUTPUT_DIR, filename)
 
     content = f"# {title}\n\n{body}" if title else body
+    if checklist:
+        content += f"\n\n---\n\n## 売れる要素チェック（生成時の自己評価）\n\n{checklist}"
     with open(filepath, "w", encoding="utf-8") as f:
         f.write(content)
 
@@ -240,18 +338,27 @@ def main():
     strategy = load_strategy()
     guide = load_writing_guide()
     writing_guide = format_writing_guide(guide)
-    theme_label, theme_desc, combination = determine_theme_and_combination(guide)
 
-    # 過去7日のThreads投稿を取得（freeモードのみ）
-    # 取得した投稿はnote記事の参照元として使い、週次分析でもどのThreads投稿が
-    # ベースになったかを追跡できるよう post_ids を記録する
-    recent_posts = []
-    ref_post_ids = ""
-    if mode == "free":
-        data = get_weekly_data(days=7)
-        recent_posts = data.get("posts", [])
-        ref_post_ids = ",".join(p.get("post_id", "") for p in recent_posts if p.get("post_id"))
-        print(f"[generate_note] 参照Threads投稿: {len(recent_posts)}件")
+    # 過去7日のThreads投稿＋メトリクスを取得（両モード共通）
+    # - freeモード: エンゲージメント上位のpost_typeからnoteテーマを決定 + 参照記事として使用
+    # - paidモード: エンゲージメント上位のpost_typeからnoteテーマのみ決定
+    data = get_weekly_data(days=7)
+    recent_posts_raw = data.get("posts", [])
+    recent_metrics = data.get("metrics", [])
+
+    # エンゲージメント情報を付加してソート
+    recent_posts = annotate_posts_with_metrics(recent_posts_raw, recent_metrics)
+    print(f"[generate_note] 過去7日Threads投稿: {len(recent_posts)}件 / メトリクスあり: {len(recent_metrics)}件")
+
+    # エンゲージメントデータからテーマ・組み合わせを決定
+    theme_label, theme_desc, combination, selection_reason = determine_theme_and_combination(
+        guide, recent_posts_raw, recent_metrics
+    )
+    print(f"[generate_note] テーマ選択: {selection_reason}")
+
+    ref_post_ids = ",".join(
+        str(p.get("post_id", "")) for p in recent_posts_raw if p.get("post_id")
+    )
 
     # Claude API で記事生成
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
@@ -260,8 +367,8 @@ def main():
         prompt = build_free_note_prompt(strategy, recent_posts, theme_label, theme_desc, writing_guide, combination)
         max_tokens = 2500
     else:
-        prompt = build_paid_note_prompt(strategy, theme_label, theme_desc, writing_guide, combination)
-        max_tokens = 5000
+        prompt = build_paid_note_prompt(strategy, theme_label, theme_desc, writing_guide, combination, guide)
+        max_tokens = 5500  # チェックリスト分を追加
 
     print(f"[generate_note] モード: {mode} / テーマ: {theme_label} / パターン: {combination['name']} / Claude API 呼び出し中...")
     message = client.messages.create(
@@ -274,12 +381,17 @@ def main():
 
     title = result["title"]
     body = result["body"]
+    checklist = result.get("checklist", "")
     print(f"[generate_note] 生成完了: {title}")
+    if checklist:
+        passed = checklist.count("✅")
+        failed = checklist.count("❌")
+        print(f"[generate_note] 売れる要素チェック: ✅{passed}個 / ❌{failed}個")
 
     # Markdownファイルとして保存
     now_jst = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
     date_str = now_jst.strftime("%Y-%m-%d")
-    filepath = save_note(title, body, mode, date_str)
+    filepath = save_note(title, body, mode, date_str, checklist)
 
     rel_path = f"output/notes/{date_str}_{mode}.md"
     repo = os.environ.get("GITHUB_REPOSITORY", "yuki-b4/sns-automation")
