@@ -170,12 +170,19 @@ def format_combination_instruction(combination: dict) -> str:
 この組み合わせの相乗効果：{combination['synergy']}"""
 
 
-def format_selling_elements(guide: dict) -> str:
-    """有料note 売れる要素チェックリストをプロンプト注入用テキストに変換"""
+def select_top_selling_elements(guide: dict) -> list[dict]:
+    """priority順に上位required_count個の売れる要素を返す"""
     elements = guide["paid_note_selling_elements"]["elements"]
     required = guide["paid_note_selling_elements"]["required_count"]
-    lines = [f"（必ず{required}個以上含めること）"]
-    for e in elements:
+    return sorted(elements, key=lambda e: e.get("priority", 99))[:required]
+
+
+def format_selling_elements(guide: dict) -> str:
+    """有料note 売れる要素チェックリストをプロンプト注入用テキストに変換（priority上位7個のみ）"""
+    selected = select_top_selling_elements(guide)
+    required = guide["paid_note_selling_elements"]["required_count"]
+    lines = [f"（以下{required}個すべてを必ず含めること）"]
+    for e in selected:
         lines.append(f"{e['id']}. 【{e['name']}】{e['description']}  ／ 配置推奨: {e['placement']}  ／ 例: {e['example']}")
     return "\n".join(lines)
 
@@ -184,13 +191,22 @@ def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label
     positioning = strategy["positioning"]
     persona = strategy["persona"]
 
-    # エンゲージメントデータを表示（あれば高い順、なければ通常表示）
-    posts_text = "\n".join([
-        f"- [{p.get('post_type','')} / エンゲージ:{p.get('_engagement_rate',0):.1%} / いいね:{p.get('_likes',0)}] {p.get('content','')}"
-        if p.get("_engagement_rate", 0) > 0
-        else f"- [{p.get('post_type','')}] {p.get('content','')}"
+    # エンゲージメント上位の投稿タイプを見出しで示し、数値は省略して投稿内容のみ表示
+    seen_types: list[str] = []
+    for p in recent_posts:
+        pt = p.get("post_type", "")
+        if pt and pt not in seen_types:
+            seen_types.append(pt)
+        if len(seen_types) >= 3:
+            break
+    top_types_header = (
+        f"（エンゲージメント上位の投稿タイプ: {' > '.join(seen_types)} の順）\n"
+        if seen_types else ""
+    )
+    posts_text = top_types_header + "\n".join(
+        f"- [{p.get('post_type','')}] {p.get('content','')}"
         for p in recent_posts[:15]
-    ])
+    )
 
     return f"""以下の戦略・執筆ガイド・Threads投稿履歴を必ず参考に、ペルソナに向けた無料note記事を生成してください。
 
@@ -224,7 +240,7 @@ def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label
 - 文字数：1200〜1500字程度
 - 見出しは ## で記述（Markdown形式）
 - 専門的だが親しみやすいトーン。精神論・根性論ではなく設計・仕組みの視点
-- CTAは「〜についてはこちらで詳しく書いています」などの自然な形にし、直接的な売り込みはしない
+- CTAは「〜についてはこちらで詳しく書いています」などの自然な形にする。記事の内容・流れ上CTAが不自然になる場合は省略してよい。直接的な売り込みは不要
 - クライアント例は「クライアントの方から」「よくある例として」の形式で
 - 事実でない体験談はNG
 
@@ -364,9 +380,13 @@ def main():
     if mode == "free":
         prompt = build_free_note_prompt(strategy, recent_posts, theme_label, theme_desc, writing_guide, combination)
         max_tokens = 2500
+        selected_element_ids = ""
     else:
         prompt = build_paid_note_prompt(strategy, theme_label, theme_desc, writing_guide, combination, guide)
         max_tokens = 5500  # チェックリスト分を追加
+        selected_element_ids = ",".join(
+            str(e["id"]) for e in select_top_selling_elements(guide)
+        )
 
     print(f"[generate_note] モード: {mode} / テーマ: {theme_label} / パターン: {combination['name']} / Claude API 呼び出し中...")
     message = client.messages.create(
@@ -416,6 +436,7 @@ def main():
         "problem_type": combination["problem_type"],
         "solution_type": combination["solution_type"],
         "ref_threads_post_ids": ref_post_ids,
+        "selling_element_ids": selected_element_ids,
     })
 
     print("[generate_note] 完了")

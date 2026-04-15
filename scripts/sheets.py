@@ -45,7 +45,7 @@ def append_note_record(record: dict) -> None:
     """note投稿DBにレコードを追加（シート名: note投稿DB）
     列構成: note_id | type | title | price | file_path | generated_at | posted_at | status
           | combination_pattern | title_type | hook_type | problem_type | solution_type
-          | ref_threads_post_ids | views | likes | comments
+          | ref_threads_post_ids | views | likes | comments | selling_elements
     """
     if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
         print("[Sheets] 認証情報が未設定のためスキップ")
@@ -71,6 +71,7 @@ def append_note_record(record: dict) -> None:
         "",                                           # O: views（手動入力）
         "",                                           # P: likes（手動入力）
         "",                                           # Q: comments（手動入力）
+        record.get("selling_element_ids", ""),       # R: 選択した売れる要素IDのカンマ区切り（paidのみ）
     ]
     sheet.append_row(row, value_input_option="RAW")
     print(f"[Sheets] note投稿DB記録: {record.get('type')} / {record.get('combination_pattern')} / {record.get('title')}")
