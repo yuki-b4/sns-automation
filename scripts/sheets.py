@@ -41,6 +41,28 @@ def append_post_record(record: dict) -> None:
     print(f"[Sheets] 投稿DB記録: {record['platform']} / {record['post_id']}")
 
 
+def append_note_record(record: dict) -> None:
+    """note投稿DBにレコードを追加（シート名: note投稿DB）"""
+    if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
+        print("[Sheets] 認証情報が未設定のためスキップ")
+        return
+
+    client = get_client()
+    sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("note投稿DB")
+    row = [
+        "",                              # note_id（投稿後に手動入力）
+        record.get("type", ""),         # free / paid
+        record.get("title", ""),        # 記事タイトル
+        record.get("price", 0),         # 0 or 1980
+        record.get("file_path", ""),    # output/notes/YYYY-MM-DD_free.md
+        record.get("generated_at", ""), # 生成日時（ISO形式）
+        "",                              # posted_at（投稿後に手動入力）
+        record.get("status", "draft"),  # draft / posted
+    ]
+    sheet.append_row(row, value_input_option="RAW")
+    print(f"[Sheets] note投稿DB記録: {record.get('type')} / {record.get('title')}")
+
+
 def bulk_upsert_metrics_records(records: list[dict]) -> None:
     """メトリクスDBのレコードを一括upsert（読み取り1回・post_idで末尾行を上書き）"""
     if not records:
