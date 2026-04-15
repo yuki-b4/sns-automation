@@ -16,7 +16,7 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python scripts/generate_post.py
         env:
-          POST_SLOT: '2'
+          POST_SLOT: '1'
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
           THREADS_TOKEN: ${{ secrets.THREADS_TOKEN }}
