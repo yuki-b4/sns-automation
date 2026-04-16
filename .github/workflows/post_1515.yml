@@ -1,9 +1,7 @@
 name: Post 15:15 JST
 
 on:
-  schedule:
-    - cron: '15 6 * * *'  # UTC 06:15 = JST 15:15
-  workflow_dispatch:
+  workflow_dispatch:  # 15:15 JST スロット停止
 
 jobs:
   post:
