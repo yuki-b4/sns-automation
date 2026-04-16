@@ -19,83 +19,71 @@ POST_TYPE_LABELS = {
 }
 
 
-def notify_slack(content: str, post_type: str, title: str = "Threads投稿完了") -> None:
+def _post_to_slack(blocks: list) -> None:
+    """Slack Incoming Webhook にブロックを送信する共通関数"""
     if not SLACK_WEBHOOK:
         print("[Slack] WebhookURLが未設定のためスキップ")
         return
-
-    label = POST_TYPE_LABELS.get(post_type, post_type)
-    message = {
-        "blocks": [
-            {
-                "type": "header",
-                "text": {"type": "plain_text", "text": f"✅ {title}（{label}）"},
-            },
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": content},
-            },
-            {
-                "type": "context",
-                "elements": [
-                    {"type": "mrkdwn", "text": "⚡ 投稿後30分以内にリプライ返信を確認してください（返信は最大のエンゲージメントシグナルです）"}
-                ],
-            },
-        ]
-    }
-
-    resp = requests.post(SLACK_WEBHOOK, data=json.dumps(message), headers={"Content-Type": "application/json"})
+    resp = requests.post(
+        SLACK_WEBHOOK,
+        data=json.dumps({"blocks": blocks}),
+        headers={"Content-Type": "application/json"},
+    )
     if resp.status_code != 200:
         print(f"[Slack] 通知失敗: {resp.status_code} {resp.text}")
     else:
         print("[Slack] 通知成功")
 
 
+def notify_slack(content: str, post_type: str, title: str = "Threads投稿完了") -> None:
+    label = POST_TYPE_LABELS.get(post_type, post_type)
+    _post_to_slack([
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": f"✅ {title}（{label}）"},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": content},
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": "⚡ 投稿後30分以内にリプライ返信を確認してください（返信は最大のエンゲージメントシグナルです）"}
+            ],
+        },
+    ])
+
+
 def notify_slack_note(title: str, mode: str, github_url: str) -> None:
     """note記事ドラフト生成完了をSlackに通知。本文は含めずGitHub URLのみを送信。"""
-    if not SLACK_WEBHOOK:
-        print("[Slack] WebhookURLが未設定のためスキップ")
-        return
-
     mode_label = "無料note" if mode == "free" else "有料note"
-    message = {
-        "blocks": [
-            {
-                "type": "header",
-                "text": {"type": "plain_text", "text": f"📝 note記事ドラフト生成完了（{mode_label}）"},
+    _post_to_slack([
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": f"📝 note記事ドラフト生成完了（{mode_label}）"},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*{title}*"},
+            "accessory": {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "記事を開く"},
+                "url": github_url,
             },
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*{title}*"},
-                "accessory": {
-                    "type": "button",
-                    "text": {"type": "plain_text", "text": "記事を開く"},
-                    "url": github_url,
-                },
-            },
-            {
-                "type": "context",
-                "elements": [
-                    {"type": "mrkdwn", "text": "✏️ 確認・微修正後、note.comに手動で投稿してください"}
-                ],
-            },
-        ]
-    }
-
-    resp = requests.post(SLACK_WEBHOOK, data=json.dumps(message), headers={"Content-Type": "application/json"})
-    if resp.status_code != 200:
-        print(f"[Slack] note通知失敗: {resp.status_code} {resp.text}")
-    else:
-        print("[Slack] note通知成功")
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": "✏️ 確認・微修正後、note.comに手動で投稿してください"}
+            ],
+        },
+    ])
 
 
 def notify_slack_note_analysis(date_str: str, github_url: str, summary: str = "") -> None:
     """note週次分析レポート完成をSlackに通知。サマリー（200字以内）＋GitHubレポートURLを送信。"""
-    if not SLACK_WEBHOOK:
-        print("[Slack] WebhookURLが未設定のためスキップ")
-        return
-
-    blocks = [
+    blocks: list = [
         {
             "type": "header",
             "text": {"type": "plain_text", "text": f"📊 note週次分析レポート完成 ({date_str})"},
@@ -121,13 +109,7 @@ def notify_slack_note_analysis(date_str: str, github_url: str, summary: str = ""
             {"type": "mrkdwn", "text": "💡 提言に基づいてnote_writing_guide.jsonを更新してください"}
         ],
     })
-
-    message = {"blocks": blocks}
-    resp = requests.post(SLACK_WEBHOOK, data=json.dumps(message), headers={"Content-Type": "application/json"})
-    if resp.status_code != 200:
-        print(f"[Slack] note分析通知失敗: {resp.status_code} {resp.text}")
-    else:
-        print("[Slack] note分析通知成功")
+    _post_to_slack(blocks)
 
 
 def notify_slack_report(report_text: str, title: str = "改善レポート", body: str = "") -> None:
@@ -135,23 +117,17 @@ def notify_slack_report(report_text: str, title: str = "改善レポート", bod
     body が指定された場合はその本文を直接Slackメッセージに含める（最大2800字）。
     省略時は全文をActionsログで確認するリンクのみ送信。
     """
-    if not SLACK_WEBHOOK:
-        print("[Slack] WebhookURLが未設定のためスキップ")
-        return
-
     run_id = os.environ.get("GITHUB_RUN_ID", "")
     repo = os.environ.get("GITHUB_REPOSITORY", "")
     actions_url = f"https://github.com/{repo}/actions/runs/{run_id}" if run_id and repo else ""
 
-    blocks = [
+    blocks: list = [
         {
             "type": "header",
             "text": {"type": "plain_text", "text": f"📊 {title}が生成されました"},
         },
     ]
-
     if body:
-        # 本文をSlackに直接掲載（Slack mrkdwn ブロックの上限2800字で切り捨て）
         blocks.append({
             "type": "section",
             "text": {"type": "mrkdwn", "text": body[:2800]},
@@ -171,11 +147,4 @@ def notify_slack_report(report_text: str, title: str = "改善レポート", bod
             "type": "section",
             "text": {"type": "mrkdwn", "text": "全文はGitHub Actionsのログで確認してください。"},
         })
-
-    message = {"blocks": blocks}
-
-    resp = requests.post(SLACK_WEBHOOK, data=json.dumps(message), headers={"Content-Type": "application/json"})
-    if resp.status_code != 200:
-        print(f"[Slack] レポート通知失敗: {resp.status_code} {resp.text}")
-    else:
-        print("[Slack] レポート通知成功")
+    _post_to_slack(blocks)

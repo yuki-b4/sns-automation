@@ -15,7 +15,6 @@ note週次パフォーマンス分析スクリプト
 """
 
 import os
-import json
 import datetime
 import anthropic
 from collections import defaultdict
@@ -25,7 +24,6 @@ from notify_slack import notify_slack_note_analysis
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "../output/reports")
 NOTES_DIR = os.path.join(SCRIPT_DIR, "../output/notes")
-NOTE_GUIDE_PATH = os.path.join(SCRIPT_DIR, "../config/note_writing_guide.json")
 
 
 def read_note_file(file_path: str) -> str:
@@ -36,11 +34,6 @@ def read_note_file(file_path: str) -> str:
             return f.read()
     except FileNotFoundError:
         return ""
-
-
-def load_writing_guide() -> dict:
-    with open(NOTE_GUIDE_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
 
 
 def build_analysis_prompt(records: list[dict], article_contents: dict, threads_summary: str) -> str:
