@@ -112,6 +112,32 @@ def notify_slack_note_analysis(date_str: str, github_url: str, summary: str = ""
     _post_to_slack(blocks)
 
 
+def notify_slack_duplicate_warning(new_content: str, similar_content: str, score: float, posted_at: str) -> None:
+    """類似投稿検出時の警告通知（投稿はすでに実行済み）"""
+    score_pct = int(score * 100)
+    posted_date = posted_at[:10] if posted_at else "不明"
+    _post_to_slack([
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": f"⚠️ 類似投稿を検出（類似度 {score_pct}%）"},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*今回の投稿:*\n{new_content[:200]}"},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*類似した過去投稿（{posted_date}）:*\n{similar_content[:200]}"},
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": "⚠️ 投稿は完了済みです。必要に応じて手動で削除・編集してください。"}
+            ],
+        },
+    ])
+
+
 def notify_slack_report(report_text: str, title: str = "改善レポート", body: str = "") -> None:
     """レポート生成完了をSlackに通知。
     body が指定された場合はその本文を直接Slackメッセージに含める（最大2800字）。
