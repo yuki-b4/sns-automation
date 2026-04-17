@@ -224,8 +224,9 @@ def main():
     strategy = load_strategy()
     post_type = determine_post_type(strategy)
 
-    # 直近投稿を取得（プロンプト注入 + 類似チェック用）
-    recent_posts = get_recent_posts_content(days=14)
+    # 直近投稿を取得し、同じpost_typeのみ絞り込む（プロンプト注入 + 類似チェック用）
+    all_recent_posts = get_recent_posts_content(days=14)
+    recent_posts = [p for p in all_recent_posts if p.get("post_type") == post_type]
 
     result = generate_post(post_type, strategy, recent_posts)
     content = result["content"]
