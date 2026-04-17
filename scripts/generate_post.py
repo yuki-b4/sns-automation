@@ -6,6 +6,7 @@ ThreadsへAutomatic投稿、投稿内容をSlack通知する
 """
 
 import os
+import re
 import json
 import time
 import datetime
@@ -13,8 +14,10 @@ import anthropic
 from preflight import run_all as preflight_check
 from post_threads import post_to_threads
 # from post_linkedin import post_to_linkedin  # LinkedIn 一時無効化
-from notify_slack import notify_slack
-from sheets import append_post_record
+from notify_slack import notify_slack, notify_slack_duplicate_warning
+from sheets import append_post_record, get_recent_posts_content
+
+SIMILARITY_THRESHOLD = 0.25
 
 STRATEGY_PATH = os.path.join(os.path.dirname(__file__), "../config/strategy.json")
 
@@ -22,6 +25,17 @@ STRATEGY_PATH = os.path.join(os.path.dirname(__file__), "../config/strategy.json
 def load_strategy():
     with open(STRATEGY_PATH, "r", encoding="utf-8") as f:
         return json.load(f)
+
+
+def _jaccard_trigram_similarity(text_a: str, text_b: str) -> float:
+    """文字トライグラムのJaccard類似度を計算（Claude API不使用）"""
+    def trigrams(text):
+        cleaned = re.sub(r'[\s\u3000「」『』【】。、！？…・\-\(\)（）""]', '', text)
+        return set(cleaned[i:i+3] for i in range(max(0, len(cleaned) - 2)))
+    a, b = trigrams(text_a), trigrams(text_b)
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
 
 
 def determine_post_type(strategy: dict) -> str:
@@ -35,7 +49,7 @@ def determine_post_type(strategy: dict) -> str:
     return rotation[index]
 
 
-def build_prompt(strategy: dict, post_type: str) -> str:
+def build_prompt(strategy: dict, post_type: str, recent_posts: list[dict] | None = None) -> str:
     positioning = strategy["positioning"]
     post_info = strategy["post_types"][post_type]
     persona = strategy["persona"]
@@ -111,6 +125,15 @@ def build_prompt(strategy: dict, post_type: str) -> str:
 【補足リプライ】
 （ここに補足リプライ）"""
 
+    recent_posts_section = ""
+    if recent_posts:
+        snippets = []
+        for p in recent_posts[-20:]:
+            date_str = p.get("posted_at", "")[:10]
+            snippet = p["content"][:100]
+            snippets.append(f"- {snippet}（{date_str}）")
+        recent_posts_section = "\n【直近の投稿（これらと同じエピソード・表現・話題は絶対に使わないこと）】\n" + "\n".join(snippets) + "\n"
+
     return f"""あなたはSNSコンテンツライターです。
 以下の戦略に基づいて、日本語のThreads投稿文と補足セルフリプライを生成してください。
 
@@ -145,7 +168,7 @@ def build_prompt(strategy: dict, post_type: str) -> str:
 - 「〇〇をする」の形で動作を書く場合は、何を対象にするかが明確に伝わる目的語を必ず含めること（「設計する」ではなく「判断の優先順位を設計する」、「仕組みをつくる」ではなく「退勤後の切り替え手順を仕組み化する」など）
 - 事実でない個人的体験を書かない。自分に子どもがいる・家族の具体エピソードなど実際と異なる内容はNG。クライアントや読者の例を使う場合は「クライアントの〇〇さんが」「よくある話で」などの形にすること
 - 自分の普通さ・限界を表現する際は「IQ高くない」「頭が悪い」のようなマイナス語を使わず、「天才ではない」「特別な才能があるわけではない」のように「{{プラスに捉えられる言葉}}ではない」の形で表現すること
-
+{recent_posts_section}
 {output_format}"""
 
 
@@ -174,11 +197,11 @@ def _parse_post(raw: str) -> dict:
     return {"content": content, "self_reply": self_reply, "self_reply2": self_reply2}
 
 
-def generate_post(post_type: str, strategy: dict) -> dict:
+def generate_post(post_type: str, strategy: dict, recent_posts: list[dict] | None = None) -> dict:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
     # Threads用コンテンツ生成（structure は3投稿構成のためmax_tokens拡張）
-    threads_prompt = build_prompt(strategy, post_type)
+    threads_prompt = build_prompt(strategy, post_type, recent_posts)
     max_tokens = 800 if post_type == "structure" else 512
     threads_message = client.messages.create(
         model="claude-opus-4-6",
@@ -200,7 +223,11 @@ def main():
 
     strategy = load_strategy()
     post_type = determine_post_type(strategy)
-    result = generate_post(post_type, strategy)
+
+    # 直近投稿を取得（プロンプト注入 + 類似チェック用）
+    recent_posts = get_recent_posts_content(days=14)
+
+    result = generate_post(post_type, strategy, recent_posts)
     content = result["content"]
     self_reply = result["self_reply"]
     self_reply2 = result.get("self_reply2", "")
@@ -238,6 +265,14 @@ def main():
     if self_reply2:
         slack_content += f"\n\n↩️ セルフリプライ2：{self_reply2}"
     notify_slack(slack_content, post_type)
+
+    # 類似度チェック（Claude API不使用、文字トライグラムJaccard）
+    if recent_posts:
+        most_similar = max(recent_posts, key=lambda r: _jaccard_trigram_similarity(content, r["content"]))
+        score = _jaccard_trigram_similarity(content, most_similar["content"])
+        print(f"[類似度チェック] 最高類似度: {score:.2f}（閾値: {SIMILARITY_THRESHOLD}）")
+        if score >= SIMILARITY_THRESHOLD:
+            notify_slack_duplicate_warning(content, most_similar["content"], score, most_similar.get("posted_at", ""))
 
     # 投稿DBに記録
     now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))

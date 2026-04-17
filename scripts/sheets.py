@@ -184,6 +184,31 @@ def mark_competitor_posts_analyzed(row_numbers: list[int]) -> None:
     print(f"[Sheets] 競合投稿DB: {len(row_numbers)}件を分析済みにマーク")
 
 
+def get_recent_posts_content(days: int = 14) -> list[dict]:
+    """直近N日分の投稿テキストを投稿DBから取得（重複チェック・プロンプト注入用）"""
+    if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
+        return []
+
+    import datetime
+    client = get_client()
+    sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("投稿DB")
+    records = sheet.get_all_records()
+
+    cutoff = datetime.datetime.now(
+        datetime.timezone(datetime.timedelta(hours=9))
+    ) - datetime.timedelta(days=days)
+
+    result = []
+    for r in records:
+        if r.get("platform") == "threads" and r.get("content") and _is_recent(r.get("posted_at", ""), cutoff):
+            result.append({
+                "content": r["content"],
+                "post_type": r.get("post_type", ""),
+                "posted_at": r.get("posted_at", ""),
+            })
+    return result
+
+
 def get_recent_post_ids(days: int = 2) -> list[dict]:
     """直近N日分の投稿IDを投稿DBから取得"""
     if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
