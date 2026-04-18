@@ -69,14 +69,13 @@ index = ((day_of_year - 1) * 5 + POST_SLOT) % len(rotation)
 投稿本文に関するポリシー（数字の丸め方、否定型フックの禁止、マイナス語での自己表現の禁止など）は `generate_post.py:build_prompt` の「共通ルール」ブロックに集中している。プロンプトを編集するときはそこを起点に探すこと。
 
 ### Google Sheets がシステムの唯一の永続ストレージ
-DB は Google Sheets の 5 タブ。`scripts/sheets.py` が全アクセスを仲介し、各タブ名を決め打ちで参照する:
+DB は Google Sheets の 4 タブ。`scripts/sheets.py` が全アクセスを仲介し、各タブ名を決め打ちで参照する:
 
 | タブ名 | 役割 | 書き込み主 |
 |---|---|---|
 | 投稿DB | 投稿履歴（post_id / platform / post_type / content / posted_at / week_number） | generate_post.py |
 | メトリクスDB | ER・インプレッション等（post_id で upsert） | collect_metrics.py |
 | 競合投稿DB | 手動入力、analyzed=TRUE で済みマーク | 手動入力 / analyze_competitors.py |
-| 競合アカウント | 分析対象アカウントID一覧 | 手動入力 |
 | note投稿DB | note 記事のメタ（生成時自動追記・views/likes は手動） | generate_note.py |
 
 gspread は数値IDを科学表記に暗黙変換するため、`sheets._normalize_id` で常に文字列に戻すこと（Threads の post_id は19桁前後の数値で、そのまま比較すると取りこぼす）。メトリクスの upsert は `bulk_upsert_metrics_records` が「1回の全読み取り → ID→行番号マップ → batch_update + append_rows」で API 呼び出しを最小化しているので、ループで write する書き方に戻さないこと。
