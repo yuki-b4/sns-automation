@@ -41,6 +41,46 @@ def load_writing_guide() -> dict:
         return json.load(f)
 
 
+def load_recent_note_excerpts(n: int = 5, exclude_date: str | None = None) -> list[dict]:
+    """直近N件のnote Markdownファイルをファイル名の新しい順で返す。
+    exclude_date（YYYY-MM-DD）で始まるファイルは除外する（同日リトライ時の自己参照防止）。
+    心理学・脳科学の用語／研究結果の重複回避プロンプトに使用する。"""
+    if not os.path.isdir(OUTPUT_DIR):
+        return []
+    files = sorted(
+        (f for f in os.listdir(OUTPUT_DIR) if f.endswith(".md")),
+        reverse=True,
+    )
+    if exclude_date:
+        files = [f for f in files if not f.startswith(exclude_date)]
+
+    excerpts: list[dict] = []
+    for filename in files[:n]:
+        filepath = os.path.join(OUTPUT_DIR, filename)
+        try:
+            with open(filepath, "r", encoding="utf-8") as fh:
+                excerpts.append({"filename": filename, "content": fh.read()})
+        except OSError:
+            continue
+    return excerpts
+
+
+def format_recent_notes_for_avoidance(excerpts: list[dict]) -> str:
+    """直近noteを「心理学・脳科学の言及重複を避ける」プロンプトに整形する。"""
+    if not excerpts:
+        return ""
+    lines = [
+        "【直近のnote記事（過去5本まで・重複回避用）】",
+        "以下の記事で既に言及されている心理学・脳科学の用語／理論／研究結果／研究者名は、今回の記事では使わないこと。",
+        "（例：ツァイガルニク効果・デフォルトモードネットワーク(DMN)・BDNF・メラトニン・認知資源枯渇・HRV・特定の大学名を伴う研究結果など）",
+        "言及の仕方は維持してよいが、必ず別の角度・別の概念・別の研究を選ぶこと。",
+    ]
+    for e in excerpts:
+        lines.append(f"\n--- {e['filename']} ---")
+        lines.append(e["content"])
+    return "\n".join(lines)
+
+
 def format_writing_guide(guide: dict) -> str:
     """note執筆ガイドをプロンプト注入用テキストに変換"""
     lines = []
@@ -196,7 +236,15 @@ def format_selling_elements(guide: dict) -> str:
     return "\n".join(lines)
 
 
-def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label: str, theme_desc: str, writing_guide: str, combination: dict) -> str:
+def build_free_note_prompt(
+    strategy: dict,
+    recent_posts: list[dict],
+    theme_label: str,
+    theme_desc: str,
+    writing_guide: str,
+    combination: dict,
+    recent_notes_section: str = "",
+) -> str:
     positioning = strategy["positioning"]
     persona = strategy["persona"]
 
@@ -238,6 +286,8 @@ def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label
 【過去7日のThreads投稿（参考・発展のベースにする）】
 {posts_text if posts_text else "（参考投稿なし）"}
 
+{recent_notes_section}
+
 【note執筆ガイド（型の詳細定義）】
 {writing_guide}
 
@@ -253,6 +303,8 @@ def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label
 - CTAは「〜についてはこちらで詳しく書いています」などの自然な形にする。記事の内容・流れ上CTAが不自然になる場合は省略してよい。直接的な売り込みは不要
 - クライアント例は「クライアントの方から」「よくある例として」の形式で
 - 事実でない体験談はNG
+- 数値表現は「48分」「23%」「週3.7時間」のような端数ある具体値を使わず、「30分以上」「1時間以上」「週3時間程度」「2割以上」のようにキリの良い数値＋「以上」「程度」「前後」で表現すること。読者がAI生成と感じる過度な具体性は避ける（例：NG「集中力が48分持続」→ OK「集中力が30分以上持続」）
+- 心理学・脳科学への言及は任意（必須ではない）。言及する場合は、上の【直近のnote記事】で既に使った用語／理論／研究結果／研究者名は絶対に再利用せず、別の角度・別の概念で切り込むこと
 
 以下の形式で出力してください（他の説明・前置き不要）：
 
@@ -263,7 +315,15 @@ def build_free_note_prompt(strategy: dict, recent_posts: list[dict], theme_label
 （ここにMarkdown形式の本文）"""
 
 
-def build_paid_note_prompt(strategy: dict, theme_label: str, theme_desc: str, writing_guide: str, combination: dict, guide: dict) -> str:
+def build_paid_note_prompt(
+    strategy: dict,
+    theme_label: str,
+    theme_desc: str,
+    writing_guide: str,
+    combination: dict,
+    guide: dict,
+    recent_notes_section: str = "",
+) -> str:
     positioning = strategy["positioning"]
     persona = strategy["persona"]
     selling_elements = format_selling_elements(guide)
@@ -286,6 +346,8 @@ def build_paid_note_prompt(strategy: dict, theme_label: str, theme_desc: str, wr
 
 {format_combination_instruction(combination)}
 
+{recent_notes_section}
+
 【note執筆ガイド（型の詳細定義）】
 {writing_guide}
 
@@ -300,8 +362,8 @@ def build_paid_note_prompt(strategy: dict, theme_label: str, theme_desc: str, wr
 【ルール】
 - 文字数：2500〜3500字程度
 - 見出しは ## / ### で記述（Markdown形式）
-- 心理学・脳科学の根拠を最低1つ含める（要素4）
-- 具体的な数字・事例を盛り込む（「〇分」「〇件削減」「〇週間で」など）（要素6）
+- 心理学・脳科学の根拠を最低1つ含める（要素4）。ただし上の【直近のnote記事】で既に言及された用語／理論／研究結果／研究者名は絶対に再利用せず、別の角度・別の概念・別の研究から選ぶこと
+- 具体的な数字・事例を盛り込む（要素6）。数値表現は「48分」「23%」「週3.7時間」のような端数ある値ではなく、「30分以上」「1時間以上」「週3時間程度」「2割以上」のようにキリの良い数値＋「以上」「程度」「前後」で表現すること。読者がAI生成と感じる過度な具体性は避ける（例：NG「集中力が48分持続」→ OK「集中力が30分以上持続」）。クライアント例・自身の事例でも同様
 - 「できる人vsできない人」型の対比フォーマットは使わない
 - CTAは上位商材への低圧力な自然な誘導（要素12）
 
@@ -384,15 +446,28 @@ def main():
         str(p.get("post_id", "")) for p in recent_posts_raw if p.get("post_id")
     )
 
+    # 直近note（過去5本まで）を読み込み、心理学・脳科学の言及重複を避けるコンテキストとして注入
+    now_jst = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
+    today_str = now_jst.strftime("%Y-%m-%d")
+    recent_note_excerpts = load_recent_note_excerpts(n=5, exclude_date=today_str)
+    recent_notes_section = format_recent_notes_for_avoidance(recent_note_excerpts)
+    print(f"[generate_note] 直近note参照: {len(recent_note_excerpts)}件 (重複回避用)")
+
     # Claude API で記事生成
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
     if mode == "free":
-        prompt = build_free_note_prompt(strategy, recent_posts, theme_label, theme_desc, writing_guide, combination)
+        prompt = build_free_note_prompt(
+            strategy, recent_posts, theme_label, theme_desc, writing_guide, combination,
+            recent_notes_section=recent_notes_section,
+        )
         max_tokens = 2500
         selected_element_ids = ""
     else:
-        prompt = build_paid_note_prompt(strategy, theme_label, theme_desc, writing_guide, combination, guide)
+        prompt = build_paid_note_prompt(
+            strategy, theme_label, theme_desc, writing_guide, combination, guide,
+            recent_notes_section=recent_notes_section,
+        )
         max_tokens = 5500  # チェックリスト分を追加
         selected_element_ids = ",".join(
             str(e["id"]) for e in select_top_selling_elements(guide)
@@ -416,9 +491,8 @@ def main():
         failed = checklist.count("❌")
         print(f"[generate_note] 売れる要素チェック: ✅{passed}個 / ❌{failed}個")
 
-    # Markdownファイルとして保存
-    now_jst = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
-    date_str = now_jst.strftime("%Y-%m-%d")
+    # Markdownファイルとして保存（now_jst / today_str は関数冒頭で確定済み）
+    date_str = today_str
     filepath = save_note(title, body, mode, date_str, checklist)
 
     rel_path = f"output/notes/{date_str}_{mode}.md"
