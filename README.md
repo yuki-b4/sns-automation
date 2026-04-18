@@ -37,8 +37,8 @@ cd sns-automation
 |---|---|
 | 投稿DB | 全投稿の記録（post_id / platform / post_type / content / posted_at / week_number） |
 | メトリクスDB | エンゲージメントデータ（post_id / collected_at / likes / reposts / replies / impressions / engagement_rate） |
-| 競合分析DB | 競合分析結果（competitor_id / platform / top_posts / avg_engagement_rate / dominant_themes / positioning_gap / collected_at） |
-| 競合アカウント | 分析対象の競合アカウントIDリスト（account_id） |
+| 競合投稿DB | 手動入力の競合投稿データ（content / likes / replies / posted_at / thread_id / reply_order / analyzed） |
+| note投稿DB | note記事のメタ情報（type / title / price / file_path / generated_at / status 他） |
 
 スプレッドシートの共有設定で、Service Accountのメールアドレス（`GOOGLE_SERVICE_ACCOUNT_JSON` 内の `client_email`）を**編集者**として招待する。
 
@@ -46,7 +46,7 @@ cd sns-automation
 
 | 権限 | 用途 |
 |---|---|
-| `threads_basic` | 競合アカウントの投稿取得 |
+| `threads_basic` | 自アカウントの基本情報取得 |
 | `threads_content_publish` | 投稿の作成・公開 |
 | `threads_manage_insights` | 投稿のインサイト取得 |
 
@@ -137,7 +137,7 @@ cd sns-automation
 | analyze_competitors | 火・金 × 競合3件 | 24回 | 900 | 150 | $0.32 + $0.27 |
 | weekly_report | 週1回 | 4回 | 1,500 | 800 | $0.09 + $0.24 |
 
-> 競合アカウント数は `競合アカウント` シートの登録数に依存。上記は3件想定。
+> 競合投稿数は `競合投稿DB` シートへの手動入力数に依存。上記は3件想定。
 
 | 集計 | 入力 | 出力 | 合計 |
 |---|---|---|---|
