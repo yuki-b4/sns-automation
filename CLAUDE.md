@@ -43,7 +43,7 @@ python scripts/notify_db_update_reminder.py     # DB 更新リマインド Slack
 ### Claude API 課金を守る preflight パターン
 `scripts/preflight.py` の `run_all()` を **Claude API 呼び出し前に必ず実行**する。Threads 認証 / Slack Webhook / Google Sheets 接続のいずれかが失敗した時点で `SystemExit(1)` し、Anthropic API への無駄課金を防ぐのが目的。`generate_post.py:main` の先頭がこの契約を体現している。新しく Claude を叩くスクリプトを追加する際は同じ順番（preflight → 生成 → 配信 → 記録）を踏襲すること。
 
-Slack の疎通チェックは「`text` フィールド欠落 JSON を POST → `HTTP 400 no_text` を成功とみなす」サイレント方式。チャンネルに可視メッセージを残さないためにあえてエラー応答で判定しているので、書き換える際は挙動を壊さないこと（`preflight.py:check_slack`）。
+Slack の疎通チェックは「`text` フィールド欠落 JSON を POST → `HTTP 400 no_text` または `invalid_payload` を成功とみなす」サイレント方式。チャンネルに可視メッセージを残さないためにあえてエラー応答で判定しているので、書き換える際は挙動を壊さないこと（`preflight.py:check_slack`）。Slack 側は時期によってレスポンス文字列が `no_text` と `invalid_payload` で揺れるため両方受理する。
 
 ### 投稿タイプと POST_SLOT によるローテーション
 投稿タイプは `config/strategy.json` の `post_rotation` 配列（長さ20、`permission`/`structure`/`personal`/`dialogue`/`opinion` のいずれか）。

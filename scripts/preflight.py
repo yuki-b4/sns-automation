@@ -36,11 +36,13 @@ def check_threads() -> None:
 def check_slack() -> None:
     """Slack Webhook URLの疎通確認（チャンネルに可視メッセージを残さないサイレント方式）。
 
-    Slack Incoming Webhook は `text` フィールド欠落のJSONに対し HTTP 400 & body "no_text" を返す。
-    - URLが有効 → 400 "no_text"（＝OK）
+    Slack Incoming Webhook は不正な本文に対しては HTTP 400 を返し、URLそのものが
+    無効な場合は 404、トークン失効は 403 を返す。本文として故意に空 JSON を送ることで
+    可視メッセージを発生させずに到達性のみを確認する。
+    - URLが有効 → 400 "no_text" / "invalid_payload"（＝OK、可視メッセージなし）
     - URL自体が無効 → 404 "no_service" / "no_service_id"
     - トークン失効 → 403 "invalid_token"
-    この挙動を利用して、可視メッセージを一切送らずに到達性を確認する。"""
+    Slack は時期によって "no_text" と "invalid_payload" を使い分けるため、両方を成功とみなす。"""
     webhook = os.environ.get("SLACK_WEBHOOK", "")
 
     if not webhook:
@@ -51,13 +53,13 @@ def check_slack() -> None:
 
     resp = requests.post(
         webhook,
-        data=json.dumps({}),  # 故意に text を欠落させる → 到達すれば必ず 400 no_text が返る
+        data=json.dumps({}),  # 故意に text を欠落させる → 到達すれば 400 no_text / invalid_payload が返る
         headers={"Content-Type": "application/json"},
         timeout=10,
     )
     body = (resp.text or "").strip().lower()
 
-    if resp.status_code == 400 and "no_text" in body:
+    if resp.status_code == 400 and ("no_text" in body or "invalid_payload" in body):
         # Webhook URL 自体は有効。可視メッセージは送信されない。
         print("[Preflight] Slack OK (silent check)")
         return
