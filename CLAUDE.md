@@ -1,0 +1,133 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Repository purpose
+
+SNS運用（Threads中心、note副次）の全工程—投稿生成→配信→メトリクス収集→競合分析→戦略改善レポート—を GitHub Actions + Python + Claude API で自動化する。ランタイムは全て GitHub Actions runner 上で、`pip install -r requirements.txt` → `python scripts/<name>.py` という単純なパターン。ローカルテスト・ビルド・lint は無い。
+
+## Development commands
+
+ローカル実行するときの典型フロー（全スクリプトは scripts/ 直下、リポジトリルートから実行する想定で相対パスが組まれている）:
+
+```bash
+pip install -r requirements.txt
+
+# 必須の環境変数（GitHub Secrets と同名）
+export ANTHROPIC_API_KEY=...
+export THREADS_USER_ID=...
+export THREADS_TOKEN=...
+export SLACK_WEBHOOK=...
+export SLACK_USER_ID=...                # メンション用、未設定可
+export GOOGLE_SHEETS_ID=...
+export GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'   # JSON文字列
+
+# 投稿生成・配信（POST_SLOT 必須、0〜4）
+POST_SLOT=0 python scripts/generate_post.py
+
+# 他の主要スクリプト
+python scripts/collect_metrics.py       # Threads インサイト取得 → メトリクスDB upsert
+python scripts/analyze_competitors.py   # 競合投稿DB → Claude 分析 → Slack
+python scripts/weekly_report.py         # 週2回改善レポート
+MODE=free python scripts/generate_note.py       # note ドラフト（free または paid）
+python scripts/analyze_note_performance.py      # note 週次パフォーマンス分析
+python scripts/notify_db_update_reminder.py     # DB 更新リマインド Slack 通知
+```
+
+手動トリガー: GitHub → Actions → 該当ワークフロー → **Run workflow**。ワークフローには全て `workflow_dispatch` が入っている。
+
+テストスイート・linter は存在しない。変更検証は「該当ワークフローを workflow_dispatch で手動実行してログと Slack を目視」が基本。
+
+## High-level architecture
+
+### Claude API 課金を守る preflight パターン
+`scripts/preflight.py` の `run_all()` を **Claude API 呼び出し前に必ず実行**する。Threads 認証 / Slack Webhook / Google Sheets 接続のいずれかが失敗した時点で `SystemExit(1)` し、Anthropic API への無駄課金を防ぐのが目的。`generate_post.py:main` の先頭がこの契約を体現している。新しく Claude を叩くスクリプトを追加する際は同じ順番（preflight → 生成 → 配信 → 記録）を踏襲すること。
+
+Slack の疎通チェックは「`text` フィールド欠落 JSON を POST → `HTTP 400 no_text` を成功とみなす」サイレント方式。チャンネルに可視メッセージを残さないためにあえてエラー応答で判定しているので、書き換える際は挙動を壊さないこと（`preflight.py:check_slack`）。
+
+### 投稿タイプと POST_SLOT によるローテーション
+投稿タイプは `config/strategy.json` の `post_rotation` 配列（長さ20、`permission`/`structure`/`personal`/`dialogue`/`opinion` のいずれか）。
+
+決定式は `generate_post.py:determine_post_type`:
+```
+index = ((day_of_year - 1) * 5 + POST_SLOT) % len(rotation)
+```
+
+各時刻別ワークフローは環境変数 `POST_SLOT`（0〜4）を渡すことで、同じスクリプトを異なるスロットとして振る舞わせる。新しい投稿時刻を足すときは、既存スロットと衝突しない値を割り当てる。**`POST_SLOT=1` は特別扱い**で、`generate_post.py:build_prompt` が「フック形式（本文末尾をクリフハンガー→補足リプライ1で答え開示）」のプロンプトに切り替える。
+
+`structure` 投稿は3投稿構成（本文＋補足リプライ1＋補足リプライ2）、他は2投稿構成。`_parse_post` が `【本文】`/`【補足リプライ1】`/`【補足リプライ2】`/`【補足リプライ】` マーカーでパースするので、プロンプト側の出力フォーマットを変更する場合はパーサと歩調を合わせること。
+
+### ポジショニング・ペルソナは strategy.json に集約
+投稿生成／競合分析／週次レポート／note 生成の4スクリプトすべてが `config/strategy.json` を読む。変更するときは下流全部に影響する前提で編集する:
+- `positioning`: position / concept / differentiation / tagline / statement
+- `persona`: description / pain_points（プロンプトに注入される）
+- `post_types`: 各タイプの label / description / ratio
+- `post_rotation`: 実際の出現順序（`ratio` は表示用で、実運用は rotation のカウント比で決まる）
+- `priority_themes`: 週次レポートで「空白地帯」として参照される
+- `author_profile`: 自己開示プロンプトの事実拘束（例: `has_children: false`、「経験年数は『長年』で濁す」）
+
+投稿本文に関するポリシー（数字の丸め方、否定型フックの禁止、マイナス語での自己表現の禁止など）は `generate_post.py:build_prompt` の「共通ルール」ブロックに集中している。プロンプトを編集するときはそこを起点に探すこと。
+
+### Google Sheets がシステムの唯一の永続ストレージ
+DB は Google Sheets の 5 タブ。`scripts/sheets.py` が全アクセスを仲介し、各タブ名を決め打ちで参照する:
+
+| タブ名 | 役割 | 書き込み主 |
+|---|---|---|
+| 投稿DB | 投稿履歴（post_id / platform / post_type / content / posted_at / week_number） | generate_post.py |
+| メトリクスDB | ER・インプレッション等（post_id で upsert） | collect_metrics.py |
+| 競合投稿DB | 手動入力、analyzed=TRUE で済みマーク | 手動入力 / analyze_competitors.py |
+| 競合アカウント | 分析対象アカウントID一覧 | 手動入力 |
+| note投稿DB | note 記事のメタ（生成時自動追記・views/likes は手動） | generate_note.py |
+
+gspread は数値IDを科学表記に暗黙変換するため、`sheets._normalize_id` で常に文字列に戻すこと（Threads の post_id は19桁前後の数値で、そのまま比較すると取りこぼす）。メトリクスの upsert は `bulk_upsert_metrics_records` が「1回の全読み取り → ID→行番号マップ → batch_update + append_rows」で API 呼び出しを最小化しているので、ループで write する書き方に戻さないこと。
+
+### 重複投稿防止（Claude 非依存）
+`generate_post.py` は生成後に `_jaccard_trigram_similarity`（文字トライグラム Jaccard 類似度）を計算し、同 post_type の直近14日投稿と比べて `SIMILARITY_THRESHOLD = 0.25` 以上なら `notify_slack_duplicate_warning` で警告する。**投稿自体は既に完了済みで自動削除はしない**—運用者が手動削除する前提。Claude API 消費を避けるため類似判定はローカル計算で完結させる設計なので、ここに LLM を差し込まない。
+
+### note 生成パイプラインは別系統
+`generate_note.py` は Threads のメトリクスから「直近一番 ER が高かった post_type」を拾い、そこから `_POST_TYPE_TO_COMBINATION_INDEX` 経由で `config/note_writing_guide.json` の組み合わせパターン（共感最大化／信頼構築／ファン化 など）と `NOTE_THEMES`（行動設計・環境設計・回復設計・判断疲れの解消・キャリア設計）を選ぶ。データ不足時は day_of_year ローテーションにフォールバック。
+- 生成結果は `output/notes/YYYY-MM-DD_{free|paid}.md` に書き出し、ワークフローが `git commit && git push` する（`note_generate.yml` 参照）。
+- `analyze_note_performance.py` は同様に `output/reports/YYYY-MM-DD_note_analysis.md` をコミット。
+- Slack 通知では本文全文は送らず GitHub blob URL を送る（トークン節約 + note は手動で note.com に投稿する運用のため）。
+
+### Threads API の2段階投稿
+`post_threads.py:post_to_threads` は `threads` エンドポイントでコンテナ作成 → 5秒 sleep → `threads_publish` で公開、という2ステップ。セルフリプライも同じ関数に `reply_to_id` を渡して再帰的に呼ぶ。本文投稿直後にリプライを投げるとコンテナ処理が間に合わないため、`generate_post.py:main` 側でも追加の `time.sleep(5)` を入れている。タイミングを詰めると Threads 側でコンテナエラーになるので短縮しないこと。
+
+### Slack 通知の責務分岐
+`notify_slack.py` には用途別に複数関数がある。使い分け:
+- `notify_slack`: 投稿完了（Header + 本文 + コンテキスト）
+- `notify_slack_report`: 改善レポート・競合分析レポート（本文 or Actions ログ URL）
+- `notify_slack_note` / `notify_slack_note_analysis`: note 関連、本文ではなく GitHub URL を送る
+- `notify_slack_duplicate_warning`: 類似投稿警告（メンション付き）
+- `notify_slack_db_update_reminder`: 分析前の DB 手動更新リマインド
+- アクション要求系（警告・リマインド・レポート完成）は `SLACK_USER_ID` が設定されていれば `<@UXXX>` メンションを頭につける（`_user_mention_prefix`）。自動完了通知にはメンションを付けない慣習。
+
+## Workflow スケジュール（JST／現行）
+
+| Workflow | 時刻 / cron | POST_SLOT | 用途 |
+|---|---|---|---|
+| post_0805.yml | 毎日 08:05 | 0 | 投稿生成・配信 |
+| post_0955.yml | 毎日 09:55 | 0 | 投稿生成・配信 |
+| post_1145.yml | 毎日 11:45 | 1 | 投稿生成・配信（フック形式スロット） |
+| post_1515.yml | （スケジュール停止中、手動のみ） | 2 | 投稿生成・配信 |
+| post_1805.yml | 毎日 18:05 | 3 | 投稿生成・配信 |
+| post_2100.yml | 毎日 21:02 | 4 | 投稿生成・配信 |
+| daily_metrics.yml | 毎日 06:00 | — | 直近30日分のメトリクス upsert |
+| competitor.yml | 火・金 08:00 | — | 競合投稿DB の未分析行を分析 |
+| weekly_report.yml | 水・土 09:00 | — | 直近4日＋競合で改善レポート |
+| note_generate.yml | 毎日 07:00 | — | 無料note ドラフト生成・自動コミット |
+| note_analyze.yml | 月 10:00 | — | note 4週分析・レポートをコミット |
+| db_update_reminder.yml | 日/月/木 01:00 | — | 分析前の DB 更新リマインド |
+
+cron は UTC 指定。JST と9時間ずれるので、時刻を編集するときは両方ずらす必要がある点に注意。
+
+README.md / DESIGN.md の時刻表は古い時代（post_0700 系）の名残りなので、ワークフロー実体と差異があるときは **ワークフローファイルが真**。
+
+## Conventions specific to this repo
+
+- すべての Python コード・コメント・ログ・プロンプト・Slack メッセージは **日本語**。生成されるコンテンツも日本語前提。
+- Claude モデルは全スクリプトで `claude-opus-4-6`。モデルを変える場合は `grep -rn "claude-opus" scripts/` で網羅的に置換する。
+- LinkedIn 関連コード（`post_linkedin.py`、`collect_metrics.py` 内の `collect_linkedin_metrics`、各ワークフローの `LINKEDIN_*` secret）は **意図的にコメントアウトで残されている**。再開時の差分を小さく保つ方針なので、「使われていないから」という理由で削除しない。
+- 投稿の `post_type` は `permission` / `structure` / `personal` / `opinion` / `dialogue` の5種。`opinion` は現状 ratio=0 で停止中だが、ラベル辞書やパースからは除外しない。
+- `output/notes/` と `output/reports/` の Markdown は GitHub Actions bot が自動コミットする。手でコミットする機会は通常ない。
+- 類似度閾値 `SIMILARITY_THRESHOLD = 0.25` はチューニング済み。上げると警告漏れ、下げるとノイズ、の観察を踏まえて決まった値なので触る前に値の変更理由を明示すること。
