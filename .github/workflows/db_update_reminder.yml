@@ -1,0 +1,22 @@
+name: DB Update Reminder 01:00 JST (Mon/Tue/Fri)
+
+on:
+  schedule:
+    # JST 01:00 月/火/金 = UTC 16:00 日/月/木
+    # 月 10:00 JST のnote週次分析、火・金 08:00 JST の競合分析の前にDB更新を促す
+    - cron: '0 16 * * 0,1,4'
+  workflow_dispatch:
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Send DB update reminder to Slack
+        run: python scripts/notify_db_update_reminder.py
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}

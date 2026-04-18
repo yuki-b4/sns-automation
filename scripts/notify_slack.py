@@ -138,6 +138,40 @@ def notify_slack_duplicate_warning(new_content: str, similar_content: str, score
     ])
 
 
+def notify_slack_db_update_reminder(analysis_labels: list[str], run_time_label: str) -> None:
+    """分析ジョブ実行前のDB更新リマインド通知。
+    analysis_labels: 当日実行される分析名（例: ["note週次分析"]）
+    run_time_label:  実行予定時刻の表記（例: "本日 10:00 JST"）
+    """
+    if not analysis_labels:
+        return
+    items = "\n".join(f"• {name}" for name in analysis_labels)
+    _post_to_slack([
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": "⏰ 分析実行前のDB更新リマインド"},
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": (
+                    f"本日は以下の分析ジョブが *{run_time_label}* に実行されます。\n\n"
+                    f"{items}\n\n"
+                    "実行前にGoogle SheetsのDB値（いいね数・閲覧数・競合分析対象列など）を"
+                    "最新に手動更新してください。"
+                ),
+            },
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": "📝 更新が完了したらこのメッセージはスルーでOKです"}
+            ],
+        },
+    ])
+
+
 def notify_slack_report(report_text: str, title: str = "改善レポート", body: str = "") -> None:
     """レポート生成完了をSlackに通知。
     body が指定された場合はその本文を直接Slackメッセージに含める（最大2800字）。
