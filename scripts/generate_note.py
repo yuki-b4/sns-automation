@@ -117,10 +117,6 @@ def format_recent_notes_for_avoidance(excerpts: list[dict]) -> str:
                 lines.append(f"  · {m}")
         else:
             lines.append(f"{header}: 心理学・脳科学の言及なし")
-    lines.append("上記で既出の用語／理論／研究結果／研究者名は今回の記事で再利用せず、別の角度・別の概念・別の研究を選ぶこと。")
-    if not any_hits:
-        # 抜粋結果がすべて空なら回避指示自体は省略できるが、空でも指示は残して誤って再導入されないようにする
-        pass
     return "\n".join(lines)
 
 
@@ -254,7 +250,6 @@ def format_combination_instruction(combination: dict) -> str:
     """組み合わせパターンをプロンプト注入用テキストに変換"""
     inst = combination["instructions"]
     return f"""【今回の組み合わせパターン：{combination['name']}（目標：{combination['target_goal']}）】
-必ず以下の4型を組み合わせて記事を書いてください。
 
 - タイトル → {combination['title_type']}：{inst['title']}
 - 冒頭フック（最初の100字）→ {combination['hook_type']}：{inst['hook']}
@@ -282,7 +277,7 @@ def select_top_selling_elements(guide: dict) -> list[dict]:
 def format_selling_elements(guide: dict) -> str:
     """有料note 売れる要素チェックリストをプロンプト注入用テキストに変換（paid固有要素のみ）"""
     selected = select_top_selling_elements(guide)
-    lines = [f"（以下{len(selected)}個すべてを必ず含めること。writing_guideで既に指示された型の実践に上乗せする有料note固有の要素）"]
+    lines = [f"（以下{len(selected)}個すべてを含めること。writing_guideで既に指示された型の実践に上乗せする有料note固有の要素）"]
     for e in selected:
         lines.append(f"{e['id']}. 【{e['name']}】{e['description']} ／ 配置: {e['placement']}")
     return "\n".join(lines)
@@ -349,7 +344,6 @@ def build_free_note_prompt(
 - CTAは「〜はこちらで詳しく書いています」程度の自然な誘導。不自然なら省略可
 - クライアント例は「クライアントの方から」「よくある例として」の形で。事実でない体験談は書かない
 - 数値は「30分以上／1時間以上／2割以上／週3時間程度」のようにキリの良い値＋「以上／程度／前後」で表現。端数の具体値（48分・23%等）はAI生成感が出るのでNG
-- 心理学・脳科学への言及は任意。言及するなら【直近のnote記事で既出】の用語／理論／研究／研究者は再利用せず別の角度を選ぶ
 
 出力形式（他の説明・前置き不要）：
 
@@ -401,7 +395,7 @@ def build_paid_note_prompt(
 
 【ルール】
 - 2500〜3500字、見出しは `##` / `###`（Markdown）
-- 心理学・脳科学の根拠を最低1つ含める（要素4）。ただし【直近のnote記事で既出】の用語／理論／研究／研究者は再利用せず別の角度から選ぶ
+- 心理学・脳科学の根拠を最低1つ含める（要素4）
 - 数値は「30分以上／1時間以上／2割以上／週3時間程度」のようにキリの良い値＋「以上／程度／前後」。端数の具体値（48分・23%等）はAI生成感が出るのでNG（要素6）
 - 「できる人vsできない人」型の対比フォーマットは使わない
 - CTAは上位商材への低圧力な自然な誘導（要素12）
