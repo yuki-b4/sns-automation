@@ -20,3 +20,4 @@ jobs:
         run: python scripts/notify_db_update_reminder.py
         env:
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_USER_ID: ${{ secrets.SLACK_USER_ID }}
