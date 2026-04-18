@@ -23,5 +23,6 @@ jobs:
           # LINKEDIN_TOKEN: ${{ secrets.LINKEDIN_TOKEN }}  # LinkedIn 一時無効化
           # LINKEDIN_ORG_ID: ${{ secrets.LINKEDIN_ORG_ID }}  # LinkedIn 一時無効化
           SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_USER_ID: ${{ secrets.SLACK_USER_ID }}
           GOOGLE_SHEETS_ID: ${{ secrets.GOOGLE_SHEETS_ID }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}

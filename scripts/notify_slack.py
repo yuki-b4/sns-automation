@@ -9,6 +9,7 @@ import json
 
 
 SLACK_WEBHOOK = os.environ.get("SLACK_WEBHOOK", "")
+SLACK_USER_ID = os.environ.get("SLACK_USER_ID", "")
 
 POST_TYPE_LABELS = {
     "permission": "許可系",
@@ -17,6 +18,12 @@ POST_TYPE_LABELS = {
     "opinion": "業界考察系",
     "dialogue": "対話系",
 }
+
+
+def _user_mention_prefix() -> str:
+    """SLACK_USER_ID が設定されていれば '<@UXXX> ' を返す。未設定なら空文字。
+    アクション要求通知（リマインド・警告・レポート完成）で先頭に付与する。"""
+    return f"<@{SLACK_USER_ID}> " if SLACK_USER_ID else ""
 
 
 def _post_to_slack(blocks: list) -> None:
@@ -83,10 +90,16 @@ def notify_slack_note(title: str, mode: str, github_url: str) -> None:
 
 def notify_slack_note_analysis(date_str: str, github_url: str, summary: str = "") -> None:
     """note週次分析レポート完成をSlackに通知。サマリー（200字以内）＋GitHubレポートURLを送信。"""
+    mention = _user_mention_prefix()
+    lead_text = f"{mention}note週次分析レポートが完成しました。" if mention else "note週次分析レポートが完成しました。"
     blocks: list = [
         {
             "type": "header",
             "text": {"type": "plain_text", "text": f"📊 note週次分析レポート完成 ({date_str})"},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": lead_text},
         },
     ]
     if summary:
@@ -116,11 +129,19 @@ def notify_slack_duplicate_warning(new_content: str, similar_content: str, score
     """類似投稿検出時の警告通知（投稿はすでに実行済み）"""
     score_pct = int(score * 100)
     posted_date = posted_at[:10] if posted_at else "不明"
-    _post_to_slack([
+    mention = _user_mention_prefix()
+    blocks: list = [
         {
             "type": "header",
             "text": {"type": "plain_text", "text": f"⚠️ 類似投稿を検出（類似度 {score_pct}%）"},
         },
+    ]
+    if mention:
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"{mention}類似投稿が検出されました。手動削除・編集の要否を確認してください。"},
+        })
+    blocks.extend([
         {
             "type": "section",
             "text": {"type": "mrkdwn", "text": f"*今回の投稿:*\n{new_content[:200]}"},
@@ -136,6 +157,7 @@ def notify_slack_duplicate_warning(new_content: str, similar_content: str, score
             ],
         },
     ])
+    _post_to_slack(blocks)
 
 
 def notify_slack_db_update_reminder(analysis_labels: list[str], run_time_label: str) -> None:
@@ -146,6 +168,7 @@ def notify_slack_db_update_reminder(analysis_labels: list[str], run_time_label: 
     if not analysis_labels:
         return
     items = "\n".join(f"• {name}" for name in analysis_labels)
+    mention = _user_mention_prefix()
     _post_to_slack([
         {
             "type": "header",
@@ -156,7 +179,7 @@ def notify_slack_db_update_reminder(analysis_labels: list[str], run_time_label: 
             "text": {
                 "type": "mrkdwn",
                 "text": (
-                    f"本日は以下の分析ジョブが *{run_time_label}* に実行されます。\n\n"
+                    f"{mention}本日は以下の分析ジョブが *{run_time_label}* に実行されます。\n\n"
                     f"{items}\n\n"
                     "実行前にGoogle SheetsのDB値（いいね数・閲覧数・競合分析対象列など）を"
                     "最新に手動更新してください。"

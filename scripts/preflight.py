@@ -34,7 +34,13 @@ def check_threads() -> None:
 
 
 def check_slack() -> None:
-    """Slack Webhook URLの疎通確認（auth.test エンドポイントは使えないため形式チェック＋POST）"""
+    """Slack Webhook URLの疎通確認（チャンネルに可視メッセージを残さないサイレント方式）。
+
+    Slack Incoming Webhook は `text` フィールド欠落のJSONに対し HTTP 400 & body "no_text" を返す。
+    - URLが有効 → 400 "no_text"（＝OK）
+    - URL自体が無効 → 404 "no_service" / "no_service_id"
+    - トークン失効 → 403 "invalid_token"
+    この挙動を利用して、可視メッセージを一切送らずに到達性を確認する。"""
     webhook = os.environ.get("SLACK_WEBHOOK", "")
 
     if not webhook:
@@ -43,18 +49,25 @@ def check_slack() -> None:
     if not webhook.startswith("https://hooks.slack.com/"):
         raise ValueError(f"[Preflight] SLACK_WEBHOOK の形式が不正です: {webhook[:40]}...")
 
-    # 疎通確認（Slackは空textを400で返すため最小テキストを送る）
     resp = requests.post(
         webhook,
-        data=json.dumps({"text": "[Preflight] Slack接続確認"}),
+        data=json.dumps({}),  # 故意に text を欠落させる → 到達すれば必ず 400 no_text が返る
         headers={"Content-Type": "application/json"},
         timeout=10,
     )
+    body = (resp.text or "").strip().lower()
 
-    if resp.status_code != 200:
-        raise ConnectionError(f"[Preflight] Slack接続エラー: HTTP {resp.status_code} {resp.text}")
+    if resp.status_code == 400 and "no_text" in body:
+        # Webhook URL 自体は有効。可視メッセージは送信されない。
+        print("[Preflight] Slack OK (silent check)")
+        return
 
-    print("[Preflight] Slack OK")
+    if resp.status_code == 404:
+        raise ConnectionError(f"[Preflight] Slack Webhook URLが無効: HTTP 404 {body}")
+    if resp.status_code == 403:
+        raise ConnectionError(f"[Preflight] Slack Webhookトークン失効の可能性: HTTP 403 {body}")
+
+    raise ConnectionError(f"[Preflight] Slack接続エラー: HTTP {resp.status_code} {body}")
 
 
 def check_google_sheets() -> None:
