@@ -14,7 +14,7 @@ import json
 import datetime
 import anthropic
 from collections import defaultdict
-from sheets import get_weekly_data, append_note_record
+from sheets import get_weekly_data, append_note_record, get_note_records
 from notify_slack import notify_slack_note
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -96,6 +96,54 @@ def _extract_psych_mentions(content: str, max_lines: int = 3) -> list[str]:
         if len(hits) >= max_lines:
             break
     return hits
+
+
+def load_past_note_titles_from_sheets(weeks: int = 4, limit: int = 10) -> list[dict]:
+    """Sheetsのnote投稿DBから直近N週・最大limit件のタイトル＋combinationを返す。
+    切り口（テーマ・場面・核概念語）の重複回避プロンプトに使用する。
+    ネットワーク失敗時は空リストを返して生成自体はブロックしない。"""
+    try:
+        records = get_note_records(weeks=weeks)
+    except Exception as e:
+        print(f"[generate_note] Sheetsからのnote履歴取得に失敗: {e}", flush=True)
+        return []
+    records = sorted(records, key=lambda r: r.get("generated_at", ""), reverse=True)
+    return records[:limit]
+
+
+def build_angle_matrix_section(strategy: dict) -> str:
+    """pain_point × 場面 × 現れ方 の切り口マトリクスをプロンプト用テキストに整形。
+    毎回必ず1組の組み合わせを選ばせることで、同じテーマでも切り口が被らないようにする。"""
+    persona = strategy.get("persona", {})
+    pains = persona.get("pain_points", [])
+    angles = strategy.get("note_angles", {})
+    situations = angles.get("situations", [])
+    manifestations = angles.get("manifestations", [])
+    if not pains or not situations or not manifestations:
+        return ""
+    lines = ["【切り口マトリクス（今回のnoteで必ず1組だけ選ぶ）】"]
+    lines.append("- pain_point（どの悩みを扱うか・1つ選ぶ）:")
+    lines += [f"  - {p}" for p in pains]
+    lines.append("- 場面（いつ・どこで発生するか・1つ選ぶ）:")
+    lines += [f"  - {s}" for s in situations]
+    lines.append("- 現れ方（どう現れるか・1つ選ぶ）:")
+    lines += [f"  - {m}" for m in manifestations]
+    lines.append("※ 選んだ3要素を、タイトルか冒頭リード文（冒頭30字以内）のいずれかで具体的な情景として必ず明示すること。")
+    return "\n".join(lines)
+
+
+def build_past_notes_avoid_section(past_records: list[dict]) -> str:
+    """Sheets履歴を「過去noteで扱った切り口（避けるべき核概念語の参照元）」としてテキスト化。"""
+    if not past_records:
+        return "【過去noteで扱った切り口（重複回避）】\n（履歴なし）"
+    lines = ["【過去noteで扱った切り口（今回は核概念語を変えること）】"]
+    for r in past_records:
+        date = (str(r.get("generated_at", "")) or "")[:10]
+        title = r.get("title", "")
+        combo = r.get("combination_pattern", "")
+        note_type = r.get("type", "")
+        lines.append(f"- {date}｜[{note_type}] {title}｜{combo}")
+    return "\n".join(lines)
 
 
 def format_recent_notes_for_avoidance(excerpts: list[dict]) -> str:
@@ -291,6 +339,8 @@ def build_free_note_prompt(
     writing_guide: str,
     combination: dict,
     recent_notes_section: str = "",
+    angle_matrix_section: str = "",
+    past_notes_avoid_section: str = "",
 ) -> str:
     positioning = strategy["positioning"]
     persona = strategy["persona"]
@@ -323,6 +373,10 @@ def build_free_note_prompt(
 
 【今日のテーマ】{theme_label}：{theme_desc}
 
+{angle_matrix_section}
+
+{past_notes_avoid_section}
+
 {format_combination_instruction(combination)}
 
 【過去7日のThreads投稿（参考・発展のベース）】
@@ -344,6 +398,9 @@ def build_free_note_prompt(
 - CTAは「〜はこちらで詳しく書いています」程度の自然な誘導。不自然なら省略可
 - クライアント例は「クライアントの方から」「よくある例として」の形で。事実でない体験談は書かない
 - 数値は「30分以上／1時間以上／2割以上／週3時間程度」のようにキリの良い値＋「以上／程度／前後」で表現。端数の具体値（48分・23%等）はAI生成感が出るのでNG
+- 【過去noteで扱った切り口】のタイトルに出てきた核概念語（例: 判断コスト・判断疲れ・金曜午後・集中力切れ）を、今回のタイトル・リード文・H2見出しのうち2箇所以上では核として使わない。同じテーマでも必ず【切り口マトリクス】で異なる「場面×現れ方」を選び直す
+- 【切り口マトリクス】から選んだ pain_point / 場面 / 現れ方 の3要素を、タイトルか冒頭リード文のいずれかで必ず具体的に明示する
+- リード文の冒頭情景は、直近3本のnoteと「場面」（例: 金曜午後／月曜朝／夕食後など）が連続で被らないようにする
 
 出力形式（他の説明・前置き不要）：
 
@@ -362,6 +419,8 @@ def build_paid_note_prompt(
     combination: dict,
     guide: dict,
     recent_notes_section: str = "",
+    angle_matrix_section: str = "",
+    past_notes_avoid_section: str = "",
 ) -> str:
     positioning = strategy["positioning"]
     persona = strategy["persona"]
@@ -377,6 +436,10 @@ def build_paid_note_prompt(
 悩み: {', '.join(persona["pain_points"])}
 
 【テーマ】{theme_label}：{theme_desc}
+
+{angle_matrix_section}
+
+{past_notes_avoid_section}
 
 {format_combination_instruction(combination)}
 
@@ -405,6 +468,9 @@ def build_paid_note_prompt(
 - 「できる人vsできない人」型の対比フォーマットは使わない
 - CTAは上位商材への低圧力な自然な誘導（要素12）
 - ペイウォール区切り（`---\n**【ここから有料エリア】**\n---`）は1箇所のみ
+- 【過去noteで扱った切り口】のタイトルに出てきた核概念語（例: 判断コスト・判断疲れ・金曜午後・集中力切れ）を、今回のタイトル・リード文・H2見出しのうち2箇所以上では核として使わない。同じテーマでも必ず【切り口マトリクス】で異なる「場面×現れ方」を選び直す
+- 【切り口マトリクス】から選んだ pain_point / 場面 / 現れ方 の3要素を、タイトルか無料ゾーンのリード文で必ず具体的に明示する
+- リード文の冒頭情景は、直近3本のnoteと「場面」（例: 金曜午後／月曜朝／夕食後など）が連続で被らないようにする
 
 以下の形式で出力してください（他の説明・前置き不要）：
 
@@ -492,7 +558,13 @@ def main():
     today_str = now_jst.strftime("%Y-%m-%d")
     recent_note_excerpts = load_recent_note_excerpts(n=5, exclude_date=today_str)
     recent_notes_section = format_recent_notes_for_avoidance(recent_note_excerpts)
-    print(f"[generate_note] 直近note参照: {len(recent_note_excerpts)}件 (重複回避用)")
+    print(f"[generate_note] 直近note参照: {len(recent_note_excerpts)}件 (心理学用語重複回避用)")
+
+    # Sheetsのnote投稿DBから過去4週のタイトル履歴を取得し、切り口（核概念語）の重複回避に使う
+    past_note_records = load_past_note_titles_from_sheets(weeks=4, limit=10)
+    angle_matrix_section = build_angle_matrix_section(strategy)
+    past_notes_avoid_section = build_past_notes_avoid_section(past_note_records)
+    print(f"[generate_note] Sheets note履歴: {len(past_note_records)}件 (切り口重複回避用)")
 
     # Claude API で記事生成
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
@@ -501,6 +573,8 @@ def main():
         prompt = build_free_note_prompt(
             strategy, recent_posts, theme_label, theme_desc, writing_guide, combination,
             recent_notes_section=recent_notes_section,
+            angle_matrix_section=angle_matrix_section,
+            past_notes_avoid_section=past_notes_avoid_section,
         )
         max_tokens = 2500
         selected_element_ids = ""
@@ -508,6 +582,8 @@ def main():
         prompt = build_paid_note_prompt(
             strategy, theme_label, theme_desc, writing_guide, combination, guide,
             recent_notes_section=recent_notes_section,
+            angle_matrix_section=angle_matrix_section,
+            past_notes_avoid_section=past_notes_avoid_section,
         )
         max_tokens = 5500  # チェックリスト分を追加
         selected_element_ids = ",".join(
