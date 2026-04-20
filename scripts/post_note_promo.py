@@ -1,6 +1,7 @@
 """
 note誘導用のThreads布石投稿スクリプト
 config/note_promo_posts.json に登録された日付の投稿を21:00 JSTに配信する。
+- 本文 → セルフリプライ1（自己経験＋核心メッセージ）→ セルフリプライ2（noteのURL単独）の3スレッド構成
 - 本日のJST日付が config に無ければ何もせず終了（ワークフロー誤発火に対する安全弁）
 - URL プレースホルダ (XXXXXXXXXXXX) が残っていればエラー終了（誤投稿防止）
 - 通常の投稿フローに倣い preflight → Threads投稿 → Slack通知 → 投稿DB記録
@@ -43,36 +44,49 @@ def main() -> None:
         return
 
     content = post["content"]
-    self_reply = post["self_reply"]
+    self_reply = post.get("self_reply", "")
+    self_reply2 = post.get("self_reply2", "")
     post_type = post.get("post_type", "structure")
 
-    # URL 未置換の誤投稿を防ぐ
-    if URL_PLACEHOLDER_MARKER in self_reply:
-        raise SystemExit(
-            f"[note_promo] self_reply に URL プレースホルダ '{URL_PLACEHOLDER_MARKER}' が残っています。"
-            f"config/note_promo_posts.json の {post['date']} の URL を実 URL に置換してください。"
-        )
+    # URL 未置換の誤投稿を防ぐ（self_reply / self_reply2 のどちらに URL を置いてもよい想定）
+    for field_name, field_value in [("self_reply", self_reply), ("self_reply2", self_reply2)]:
+        if URL_PLACEHOLDER_MARKER in field_value:
+            raise SystemExit(
+                f"[note_promo] {field_name} に URL プレースホルダ '{URL_PLACEHOLDER_MARKER}' が残っています。"
+                f"config/note_promo_posts.json の {post['date']} の URL を実 URL に置換してください。"
+            )
 
     # 外部サービス疎通確認（Threads / Slack / Google Sheets）
     preflight_check()
 
     print(f"[note_promo] 投稿対象日付: {post['date']} (JST)")
     print(f"[Threads本文]\n{content}\n")
-    print(f"[Threads補足リプライ]\n{self_reply}\n")
+    if self_reply:
+        print(f"[Threads補足リプライ1]\n{self_reply}\n")
+    if self_reply2:
+        print(f"[Threads補足リプライ2]\n{self_reply2}\n")
 
-    # Threads へ投稿（本文 → セルフリプライ）
+    # Threads へ投稿（本文 → セルフリプライ1 → セルフリプライ2 の連鎖）
     threads_id = post_to_threads(content)
     reply_id = None
     if threads_id and self_reply:
         time.sleep(5)  # 本文コンテナ処理完了を待つ
         reply_id = post_to_threads(self_reply, reply_to_id=threads_id)
         if reply_id:
-            print(f"[Threads] セルフリプライ投稿成功: {reply_id}")
+            print(f"[Threads] セルフリプライ1投稿成功: {reply_id}")
+
+    if reply_id and self_reply2:
+        time.sleep(5)  # セルフリプライ1コンテナ処理完了を待つ
+        reply2_id = post_to_threads(self_reply2, reply_to_id=reply_id)
+        if reply2_id:
+            print(f"[Threads] セルフリプライ2投稿成功: {reply2_id}")
 
     # Slack 通知
     slack_content = content
     if self_reply:
-        slack_content += f"\n\n↩️ セルフリプライ：{self_reply}"
+        slack_content += f"\n\n↩️ セルフリプライ1：{self_reply}"
+    if self_reply2:
+        slack_content += f"\n\n↩️ セルフリプライ2：{self_reply2}"
     notify_slack(slack_content, post_type, title="note誘導Threads投稿完了")
 
     # 投稿DB に記録
