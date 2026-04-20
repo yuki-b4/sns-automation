@@ -174,8 +174,6 @@ def notify_slack_db_update_reminder(analysis_labels: list[str], run_time_label: 
     details = "実行前にGoogle SheetsのDB値を最新に手動更新してください。"
     if "note週次分析" in analysis_labels:
         details += "\n\n*note投稿DB*：投稿済みの記事は *status* 列を `posted` に変更"
-    if "競合分析" in analysis_labels:
-        details += "\n\n*競合投稿DB*：分析対象行の *analyzed* 列を `TRUE` に変更（不要な行は削除）"
 
     _post_to_slack([
         {
