@@ -1,0 +1,30 @@
+name: Note Promo Posts (Apr 21-23, 2026)
+
+# note記事『頑張れてしまう人ほど働き方を変えられない理由』への誘導布石投稿を
+# 2026-04-21 / 04-22 / 04-23 の各 21:00 JST (= 12:00 UTC) に1本ずつ配信する。
+# - cron は 4月 21-23 日の 12:00 UTC で発火（年指定はできないため毎年発火し得る）
+# - スクリプト側で config/note_promo_posts.json の日付に一致しないと no-op 終了
+# - 2026-04-23 の投稿が完了したら、このワークフローファイルごと削除して構わない
+on:
+  schedule:
+    - cron: '0 12 21-23 4 *'  # UTC 12:00 (= JST 21:00), April 21-23
+  workflow_dispatch:
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - run: python scripts/post_note_promo.py
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          THREADS_USER_ID: ${{ secrets.THREADS_USER_ID }}
+          THREADS_TOKEN: ${{ secrets.THREADS_TOKEN }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_USER_ID: ${{ secrets.SLACK_USER_ID }}
+          GOOGLE_SHEETS_ID: ${{ secrets.GOOGLE_SHEETS_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
