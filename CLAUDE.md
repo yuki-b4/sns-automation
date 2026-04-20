@@ -64,7 +64,8 @@ index = ((day_of_year - 1) * 5 + POST_SLOT) % len(rotation)
 - `post_types`: 各タイプの label / description / ratio
 - `post_rotation`: 実際の出現順序（`ratio` は表示用で、実運用は rotation のカウント比で決まる）
 - `priority_themes`: 週次レポートで「空白地帯」として参照される
-- `author_profile`: 自己開示プロンプトの事実拘束（例: `has_children: false`、「経験年数は『長年』で濁す」）
+
+発信者の事実情報（結婚・子どもの有無・キャリア年数など）と、そこから派生する自己開示スタンスは `docs/author_profile.md` に切り出してある。実行時には参照されず、`generate_post.py` / `generate_note.py` の共通ルールにハードコードされた制約の**根拠ドキュメント**として扱う。
 
 投稿本文に関するポリシー（数字の丸め方、否定型フックの禁止、マイナス語での自己表現の禁止など）は `generate_post.py:build_prompt` の「共通ルール」ブロックに集中している。プロンプトを編集するときはそこを起点に探すこと。
 
