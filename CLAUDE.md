@@ -109,7 +109,7 @@ gspread は数値IDを科学表記に暗黙変換するため、`sheets._normali
 - 課金源が `ANTHROPIC_API_KEY`（従量）ではなく **Claude.ai サブスクリプション枠**。そのため `preflight.py` の「Claude API 課金を守る」契約の外側で動く
 - 実行基盤が Anthropic 管理インフラ。ローカル再現不可（`python scripts/...` では動かせない）
 - Sheets 書き込みは `sheets.py` を経由せず Sheets MCP 経由で直接。gspread の `_normalize_id` も通らないので、関心テーマDB は ID 正規化を必要とするカラムを持たせない方針
-- 下流スクリプトは関心テーマDB を**参照しない**（現状維持）。`used_in_post_id` カラムは将来の双方向連動用の予約枠で、いまは常に空。注入を始めるときは `sheets.py` に読み取り関数を追加して `generate_post.py:build_prompt` に差す
+- 下流スクリプトは関心テーマDB を**参照しない**（現状維持）。将来注入を始める場合は `sheets.py` に読み取り関数を追加して `generate_post.py:build_prompt` に差す
 - 失敗時・情報不足時の Slack 通知規約はプロンプト側に埋め込み済み（成功・失敗・高スコア item ゼロの 3 系統で必ず 1 通は出す）
 
 Python スクリプトからこの DB を触る予定ができるまで、関心テーマDB は「運用者が目視でネタを拾う資料置き場」として独立運用する。
