@@ -63,14 +63,13 @@ index = ((day_of_year - 1) * 5 + POST_SLOT) % len(rotation)
 - `persona`: description / pain_points（プロンプトに注入される）
 - `post_types`: 各タイプの label / description / ratio
 - `post_rotation`: 実際の出現順序（`ratio` は表示用で、実運用は rotation のカウント比で決まる）
-- `priority_themes`: 週次レポートで「空白地帯」として参照される
 
 発信者の事実情報（結婚・子どもの有無・キャリア年数など）と、そこから派生する自己開示スタンスは `docs/author_profile.md` に切り出してある。実行時には参照されず、`generate_post.py` / `generate_note.py` の共通ルールにハードコードされた制約の**根拠ドキュメント**として扱う。
 
 投稿本文に関するポリシー（数字の丸め方、否定型フックの禁止、マイナス語での自己表現の禁止など）は `generate_post.py:build_prompt` の「共通ルール」ブロックに集中している。プロンプトを編集するときはそこを起点に探すこと。
 
 ### Google Sheets がシステムの唯一の永続ストレージ
-DB は Google Sheets の 4 タブ。`scripts/sheets.py` が全アクセスを仲介し、各タブ名を決め打ちで参照する:
+DB は Google Sheets の 5 タブ。`scripts/sheets.py` が Python 側の全アクセスを仲介し、各タブ名を決め打ちで参照する（関心テーマDB だけは Claude Code Routines 側から Sheets MCP 経由で書き込まれるため `sheets.py` を通らない）:
 
 | タブ名 | 役割 | 書き込み主 |
 |---|---|---|
@@ -78,6 +77,7 @@ DB は Google Sheets の 4 タブ。`scripts/sheets.py` が全アクセスを仲
 | メトリクスDB | ER・インプレッション等（post_id で upsert） | collect_metrics.py |
 | 競合投稿DB | 手動入力、analyzed=TRUE で済みマーク | 手動入力 / analyze_competitors.py |
 | note投稿DB | note 記事のメタ（生成時自動追記・views/likes は手動） | generate_note.py |
+| 関心テーマDB | ターゲット関心に沿う外部情報（news/trend/research 等）のネタ資料 DB | Claude Code Routines（`routines/interest_themes_collection.md`） |
 
 gspread は数値IDを科学表記に暗黙変換するため、`sheets._normalize_id` で常に文字列に戻すこと（Threads の post_id は19桁前後の数値で、そのまま比較すると取りこぼす）。メトリクスの upsert は `bulk_upsert_metrics_records` が「1回の全読み取り → ID→行番号マップ → batch_update + append_rows」で API 呼び出しを最小化しているので、ループで write する書き方に戻さないこと。
 
@@ -101,6 +101,17 @@ gspread は数値IDを科学表記に暗黙変換するため、`sheets._normali
 - `notify_slack_duplicate_warning`: 類似投稿警告（メンション付き）
 - `notify_slack_db_update_reminder`: 分析前の DB 手動更新リマインド
 - アクション要求系（警告・リマインド・レポート完成）は `SLACK_USER_ID` が設定されていれば `<@UXXX>` メンションを頭につける（`_user_mention_prefix`）。自動完了通知にはメンションを付けない慣習。
+
+### Claude Code Routines で走る別系統ジョブ
+「関心テーマDB 収集」は **GitHub Actions ではなく Claude Code Routines（claude.ai）で実行される別系統ジョブ**。仕様は `routines/interest_themes_collection.md`。設計上の違い:
+
+- 課金源が `ANTHROPIC_API_KEY`（従量）ではなく **Claude.ai サブスクリプション枠**。そのため `preflight.py` の「Claude API 課金を守る」契約の外側で動く
+- 実行基盤が Anthropic 管理インフラ。ローカル再現不可（`python scripts/...` では動かせない）
+- Sheets 書き込みは `sheets.py` を経由せず Sheets MCP 経由で直接。gspread の `_normalize_id` も通らないので、関心テーマDB は ID 正規化を必要とするカラムを持たせない方針
+- 下流スクリプトは関心テーマDB を**参照しない**（現状維持）。将来注入を始める場合は `sheets.py` に読み取り関数を追加して `generate_post.py:build_prompt` に差す
+- 失敗時・情報不足時の Slack 通知規約はプロンプト側に埋め込み済み（成功・失敗・高スコア item ゼロの 3 系統で必ず 1 通は出す）
+
+Python スクリプトからこの DB を触る予定ができるまで、関心テーマDB は「運用者が目視でネタを拾う資料置き場」として独立運用する。
 
 ## Workflow スケジュール（JST／現行）
 
