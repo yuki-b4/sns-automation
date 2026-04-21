@@ -63,7 +63,6 @@ index = ((day_of_year - 1) * 5 + POST_SLOT) % len(rotation)
 - `persona`: description / pain_points（プロンプトに注入される）
 - `post_types`: 各タイプの label / description / ratio
 - `post_rotation`: 実際の出現順序（`ratio` は表示用で、実運用は rotation のカウント比で決まる）
-- `priority_themes`: 定義のみ。現状どのスクリプトからも注入されていない（`weekly_report.py` の「空白地帯」項目は Claude が自社/競合データからその場で推定しているだけで、本キーは渡していない）。運用資料として残してあるが、将来プロンプトに差し込む場合は下流全部の影響を確認すること
 
 発信者の事実情報（結婚・子どもの有無・キャリア年数など）と、そこから派生する自己開示スタンスは `docs/author_profile.md` に切り出してある。実行時には参照されず、`generate_post.py` / `generate_note.py` の共通ルールにハードコードされた制約の**根拠ドキュメント**として扱う。
 
