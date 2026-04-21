@@ -12,6 +12,7 @@ import time
 import datetime
 import anthropic
 from preflight import run_all as preflight_check
+from token_cost import log_token_cost
 from post_threads import post_to_threads
 # from post_linkedin import post_to_linkedin  # LinkedIn 一時無効化
 from notify_slack import notify_slack, notify_slack_duplicate_warning
@@ -222,6 +223,7 @@ def generate_post(post_type: str, strategy: dict, recent_posts: list[dict] | Non
         max_tokens=max_tokens,
         messages=[{"role": "user", "content": threads_prompt}],
     )
+    log_token_cost("claude-opus-4-6", threads_message.usage, "generate_post")
     threads_result = _parse_post(threads_message.content[0].text.strip())
 
     return {

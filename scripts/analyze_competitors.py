@@ -11,6 +11,7 @@ import datetime
 import anthropic
 from sheets import get_recent_competitor_posts, mark_competitor_posts_analyzed
 from notify_slack import notify_slack_report
+from token_cost import log_token_cost
 
 STRATEGY_PATH = os.path.join(os.path.dirname(__file__), "../config/strategy.json")
 
@@ -120,7 +121,7 @@ def analyze_with_claude(posts: list[dict], strategy: dict) -> str:
         max_tokens=2048,
         messages=[{"role": "user", "content": prompt}],
     )
-
+    log_token_cost("claude-opus-4-6", message.usage, "analyze_competitors")
     return message.content[0].text.strip()
 
 

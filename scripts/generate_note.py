@@ -16,6 +16,7 @@ import anthropic
 from collections import defaultdict
 from sheets import get_weekly_data, append_note_record, get_note_records
 from notify_slack import notify_slack_note
+from token_cost import log_token_cost
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 STRATEGY_PATH = os.path.join(SCRIPT_DIR, "../config/strategy.json")
@@ -596,6 +597,7 @@ def main():
         max_tokens=max_tokens,
         messages=[{"role": "user", "content": prompt}],
     )
+    log_token_cost("claude-opus-4-6", message.usage, "generate_note")
     raw = message.content[0].text.strip()
     result = parse_note(raw)
 

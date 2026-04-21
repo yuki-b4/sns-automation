@@ -10,6 +10,7 @@ import json
 import anthropic
 from sheets import get_weekly_data, get_recent_competitor_posts
 from notify_slack import notify_slack_report
+from token_cost import log_token_cost
 
 
 STRATEGY_PATH = os.path.join(os.path.dirname(__file__), "../config/strategy.json")
@@ -140,6 +141,7 @@ def generate_report(strategy: dict, own_summary: str, competitor_summary: str, p
         max_tokens=2048,
         messages=[{"role": "user", "content": prompt}],
     )
+    log_token_cost("claude-opus-4-6", message.usage, "weekly_report")
     return message.content[0].text.strip()
 
 
