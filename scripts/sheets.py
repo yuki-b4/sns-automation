@@ -270,6 +270,28 @@ def get_recent_competitor_data() -> list[dict]:
 
 
 
+def append_cost_record(record: dict) -> None:
+    """APIコストDBにトークン使用量とコストを追記する（シート名: APIコストDB）
+    列構成: timestamp | script | model | input_tokens | output_tokens | cost_usd
+    """
+    if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
+        print("[Sheets] 認証情報が未設定のためスキップ")
+        return
+
+    client = get_client()
+    sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("APIコストDB")
+    row = [
+        record.get("timestamp", ""),
+        record.get("script", ""),
+        record.get("model", ""),
+        record.get("input_tokens", 0),
+        record.get("output_tokens", 0),
+        record.get("cost_usd", 0.0),
+    ]
+    sheet.append_row(row, value_input_option="RAW")
+    print(f"[Sheets] APIコストDB記録: {record.get('script')} / ${record.get('cost_usd', 0.0):.4f}")
+
+
 def _normalize_id(value) -> str:
     """Google Sheetsが科学表記に変換した数値IDを文字列に正規化する"""
     from decimal import Decimal, InvalidOperation

@@ -20,6 +20,7 @@ import anthropic
 from collections import defaultdict
 from sheets import get_note_records, get_weekly_data
 from notify_slack import notify_slack_note_analysis
+from token_cost import log_token_cost
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "../output/reports")
@@ -196,10 +197,11 @@ def main():
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     message = client.messages.create(
-        model="claude-opus-4-6",
+        model="claude-opus-4-7",
         max_tokens=4000,
         messages=[{"role": "user", "content": prompt}],
     )
+    log_token_cost("claude-opus-4-7", message.usage, "analyze_note_performance")
     report = message.content[0].text.strip()
 
     # レポートを保存
