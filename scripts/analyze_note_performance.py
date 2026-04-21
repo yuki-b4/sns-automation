@@ -197,11 +197,11 @@ def main():
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     message = client.messages.create(
-        model="claude-opus-4-6",
+        model="claude-opus-4-7",
         max_tokens=4000,
         messages=[{"role": "user", "content": prompt}],
     )
-    log_token_cost("claude-opus-4-6", message.usage, "analyze_note_performance")
+    log_token_cost("claude-opus-4-7", message.usage, "analyze_note_performance")
     report = message.content[0].text.strip()
 
     # レポートを保存

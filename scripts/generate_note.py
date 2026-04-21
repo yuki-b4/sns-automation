@@ -593,11 +593,11 @@ def main():
 
     print(f"[generate_note] モード: {mode} / テーマ: {theme_label} / パターン: {combination['name']} / Claude API 呼び出し中...")
     message = client.messages.create(
-        model="claude-opus-4-6",
+        model="claude-opus-4-7",
         max_tokens=max_tokens,
         messages=[{"role": "user", "content": prompt}],
     )
-    log_token_cost("claude-opus-4-6", message.usage, "generate_note")
+    log_token_cost("claude-opus-4-7", message.usage, "generate_note")
     raw = message.content[0].text.strip()
     result = parse_note(raw)
 

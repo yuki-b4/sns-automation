@@ -117,11 +117,11 @@ def analyze_with_claude(posts: list[dict], strategy: dict) -> str:
 【文字数】全体で約1200文字を目安にすること"""
 
     message = client.messages.create(
-        model="claude-opus-4-6",
+        model="claude-opus-4-7",
         max_tokens=2048,
         messages=[{"role": "user", "content": prompt}],
     )
-    log_token_cost("claude-opus-4-6", message.usage, "analyze_competitors")
+    log_token_cost("claude-opus-4-7", message.usage, "analyze_competitors")
     return message.content[0].text.strip()
 
 
