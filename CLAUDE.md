@@ -142,3 +142,4 @@ README.md / DESIGN.md の時刻表は古い時代（post_0700 系）の名残り
 - 投稿の `post_type` は `permission` / `structure` / `personal` / `opinion` / `dialogue` の5種。`opinion` は現状 ratio=0 で停止中だが、ラベル辞書やパースからは除外しない。
 - `output/notes/` と `output/reports/` の Markdown は GitHub Actions bot が自動コミットする。手でコミットする機会は通常ない。
 - 類似度閾値 `SIMILARITY_THRESHOLD = 0.25` はチューニング済み。上げると警告漏れ、下げるとノイズ、の観察を踏まえて決まった値なので触る前に値の変更理由を明示すること。
+- `scripts/generate_post.py` / `scripts/generate_note.py` のプロンプト共通ルール／type_specific_rules／出力フォーマット、および `config/strategy.json` の `post_types.*.description` / `positioning` / `persona` など **Claude へ注入されるルール・説明文を追加・編集するときは、既存文との概念／意味内容の重複を必ず事前チェックする**こと。`description`（`build_prompt` 冒頭で注入）と `type_specific_rules`（投稿タイプ別ブロック）で同じ指示が2回並ぶ・共通ルール同士で締め方や禁止事項が二重定義される、といった事故が起きやすい。編集前に `grep` などで重複キーワード（「〜禁止」「〜しない」「〜で締める」等）を横断確認する。**重複が見つかった場合は自動判断で統合・削除せず、重複箇所と選択肢（どちらを残すか／統合するか）をユーザーに提示して判断を仰ぐこと。**
