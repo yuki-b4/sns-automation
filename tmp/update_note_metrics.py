@@ -13,17 +13,25 @@ note投稿DBの views / likes / comments を画像から抽出した値で一括
 DB に同タイトルが複数あれば全行を上書きする（基本的に重複しない前提）。
 
 DB のタイトルは手動で変更されることがあるため、画像にあって DB に無いタイトルが
-1件でもあれば NoteTitleNotFoundError を送出して書き込みを中断する。
+1件でもあれば書き込みモードでは NoteTitleNotFoundError を送出して中断する。
 （手動編集の取りこぼしを silent skip させないため）
+
+ドライランの場合は中断せず、output/notes/*.md の1行目（# 見出し）と照合して
+一致するファイルがあればログに「ファイル名」を併記する。一致するファイルが
+無いタイトルはタイトルだけログに残す。
 """
 
 import os
 import sys
+import glob
 
 # scripts/ を import path に追加
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 from sheets import GOOGLE_SHEETS_ID, GOOGLE_SERVICE_ACCOUNT_JSON, get_client
+
+
+NOTES_DIR = os.path.join(os.path.dirname(__file__), "..", "output", "notes")
 
 
 class NoteTitleNotFoundError(Exception):
@@ -34,6 +42,23 @@ class NoteTitleNotFoundError(Exception):
         super().__init__(
             f"note投稿DB に存在しないタイトルが {len(missing_titles)} 件あります"
         )
+
+
+def _find_note_file_by_title(title: str) -> str | None:
+    """output/notes/*.md のうち1行目（# 見出し）が title と一致するファイル名を返す"""
+    if not os.path.isdir(NOTES_DIR):
+        return None
+    for path in sorted(glob.glob(os.path.join(NOTES_DIR, "*.md"))):
+        try:
+            with open(path, encoding="utf-8") as f:
+                first_line = f.readline().strip()
+        except OSError:
+            continue
+        # markdown 見出しの "# " を剥がして比較
+        heading = first_line.lstrip("#").strip()
+        if heading == title:
+            return os.path.basename(path)
+    return None
 
 
 # 画像から抽出した値（記事タイトル → views / likes / comments）
@@ -101,9 +126,21 @@ def main(apply: bool) -> None:
     print(f"更新対象: {matched}行  (画像の項目: {len(NOTE_METRICS)}件)")
 
     if missing:
-        raise NoteTitleNotFoundError(missing)
+        print()
+        print(f"[WARN] note投稿DBに存在しないタイトル: {len(missing)}件")
+        for t in missing:
+            note_file = _find_note_file_by_title(t)
+            if note_file:
+                print(f"  - {t}  → output/notes/{note_file} と一致（DB側のタイトルが手動変更された可能性）")
+            else:
+                print(f"  - {t}")
+
+        # 書き込みモードでは silent skip させずに中断する
+        if apply:
+            raise NoteTitleNotFoundError(missing)
 
     if not apply:
+        print()
         print("ドライラン完了（--apply 未指定のため書き込みなし）")
         return
 
@@ -122,9 +159,5 @@ if __name__ == "__main__":
     except NoteTitleNotFoundError as e:
         print()
         print(f"[ERROR] {e}")
-        print("DB側でタイトルが手動変更されている可能性があります。以下を確認してください:")
-        for t in e.missing_titles:
-            print(f"  - {t}")
-        print()
         print("対処: NOTE_METRICS のタイトルを DB の現状値に合わせて書き換えてから再実行してください。")
         sys.exit(2)
