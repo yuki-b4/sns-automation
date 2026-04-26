@@ -1,0 +1,33 @@
+name: Update Note Metrics (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: '実行モード（dry-run = 書き込みなし / apply = note投稿DB へ書き込み）'
+        type: choice
+        required: true
+        default: 'dry-run'
+        options:
+          - dry-run
+          - apply
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Run update_note_metrics
+        run: |
+          if [ "${{ inputs.mode }}" = "apply" ]; then
+            python tmp/update_note_metrics.py --apply
+          else
+            python tmp/update_note_metrics.py
+          fi
+        env:
+          GOOGLE_SHEETS_ID: ${{ secrets.GOOGLE_SHEETS_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
