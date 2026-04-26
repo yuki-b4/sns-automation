@@ -11,7 +11,10 @@ note投稿DBの views / likes / comments を画像から抽出した値で一括
 
 タイトル完全一致で C列 を検索し、O / P / Q 列を batch_update する。
 DB に同タイトルが複数あれば全行を上書きする（基本的に重複しない前提）。
-画像にあって DB に無いタイトル、DB にあって画像に無い行はそれぞれログするだけで無視。
+
+DB のタイトルは手動で変更されることがあるため、画像にあって DB に無いタイトルが
+1件でもあれば NoteTitleNotFoundError を送出して書き込みを中断する。
+（手動編集の取りこぼしを silent skip させないため）
 """
 
 import os
@@ -21,6 +24,16 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "scripts"))
 
 from sheets import GOOGLE_SHEETS_ID, GOOGLE_SERVICE_ACCOUNT_JSON, get_client
+
+
+class NoteTitleNotFoundError(Exception):
+    """画像にあるタイトルが note投稿DB に見つからなかった場合に送出"""
+
+    def __init__(self, missing_titles: list[str]):
+        self.missing_titles = missing_titles
+        super().__init__(
+            f"note投稿DB に存在しないタイトルが {len(missing_titles)} 件あります"
+        )
 
 
 # 画像から抽出した値（記事タイトル → views / likes / comments）
@@ -84,14 +97,11 @@ def main(apply: bool) -> None:
             matched += 1
             print(f"[MATCH] row={r}  views={m['views']:>3}  likes={m['likes']:>2}  comments={m['comments']:>2}  {title}")
 
-    if missing:
-        print()
-        print(f"[WARN] DBに見つからなかったタイトル: {len(missing)}件")
-        for t in missing:
-            print(f"  - {t}")
-
     print()
     print(f"更新対象: {matched}行  (画像の項目: {len(NOTE_METRICS)}件)")
+
+    if missing:
+        raise NoteTitleNotFoundError(missing)
 
     if not apply:
         print("ドライラン完了（--apply 未指定のため書き込みなし）")
@@ -107,4 +117,14 @@ def main(apply: bool) -> None:
 
 if __name__ == "__main__":
     apply = "--apply" in sys.argv
-    main(apply)
+    try:
+        main(apply)
+    except NoteTitleNotFoundError as e:
+        print()
+        print(f"[ERROR] {e}")
+        print("DB側でタイトルが手動変更されている可能性があります。以下を確認してください:")
+        for t in e.missing_titles:
+            print(f"  - {t}")
+        print()
+        print("対処: NOTE_METRICS のタイトルを DB の現状値に合わせて書き換えてから再実行してください。")
+        sys.exit(2)
