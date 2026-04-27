@@ -16,7 +16,7 @@ import datetime
 import anthropic
 from collections import defaultdict
 from sheets import get_weekly_data, append_note_record, get_note_records
-from notify_slack import notify_slack_note
+from notify_slack import notify_slack_note, notify_slack_note_generation_failure
 from token_cost import log_token_cost
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -321,6 +321,10 @@ def build_past_themes_avoid_section(past_records: list[dict]) -> str:
     return "\n".join(lines)
 
 
+class ThemeGenerationError(RuntimeError):
+    """テーマ動的生成の致命的失敗。フォールバックせず main() で Slack 通知＋停止する。"""
+
+
 def propose_dynamic_theme(
     client: anthropic.Anthropic,
     strategy: dict,
@@ -334,7 +338,7 @@ def propose_dynamic_theme(
     ペルソナ・コンセプト・商品から逆算し、過去テーマと重複しない切り口を1つ返させる。
 
     Returns: (theme_label, theme_description)
-    生成失敗時は安全側のフォールバック（combination ベースの汎用テーマ）を返す。
+    生成失敗時は ThemeGenerationError を送出する（呼び出し側で Slack 通知＋停止）。
     """
     positioning = strategy["positioning"]
     persona = strategy["persona"]
@@ -398,27 +402,28 @@ def propose_dynamic_theme(
             max_tokens=400,
             messages=[{"role": "user", "content": prompt}],
         )
-        log_token_cost("claude-opus-4-7", message.usage, "generate_note_theme")
-        raw = message.content[0].text.strip()
-        # ```json などのフェンス除去
-        if raw.startswith("```"):
-            raw = re.sub(r"^```(?:json)?\s*", "", raw)
-            raw = re.sub(r"\s*```$", "", raw)
-        data = json.loads(raw)
-        label = (data.get("theme_label") or "").strip()
-        desc = (data.get("theme_description") or "").strip()
-        if not label or not desc:
-            raise ValueError("theme_label / theme_description が空")
-        return label, desc
     except Exception as e:
-        print(f"[generate_note] テーマ動的生成に失敗: {e} → フォールバック使用", flush=True)
-        # フォールバック: combination の target_goal を流用した汎用テーマ
-        fallback_label = f"{combination['name']}型のテーマ"
-        fallback_desc = (
-            f"{persona['description'][:40]}向けに、"
-            f"{combination['target_goal']}を狙った切り口で行動設計を提案する。"
+        raise ThemeGenerationError(f"Claude API呼び出しに失敗: {type(e).__name__}: {e}") from e
+
+    log_token_cost("claude-opus-4-7", message.usage, "generate_note_theme")
+    raw = message.content[0].text.strip()
+    # ```json などのフェンス除去
+    if raw.startswith("```"):
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ThemeGenerationError(
+            f"JSONパース失敗: {e}\n生成テキスト先頭500字: {raw[:500]}"
+        ) from e
+    label = (data.get("theme_label") or "").strip()
+    desc = (data.get("theme_description") or "").strip()
+    if not label or not desc:
+        raise ThemeGenerationError(
+            f"theme_label / theme_description が空または欠落。生成データ: {data}"
         )
-        return fallback_label, fallback_desc
+    return label, desc
 
 
 def format_combination_instruction(combination: dict) -> str:
@@ -719,9 +724,18 @@ def main():
             if len(seen_pt) >= 3:
                 break
         best_post_type_hint = " > ".join(_POST_TYPE_LABELS.get(t, t) for t in seen_pt)
-    theme_label, theme_desc = propose_dynamic_theme(
-        client, strategy, mode, angle_combo, past_note_records, combination, best_post_type_hint
-    )
+    try:
+        theme_label, theme_desc = propose_dynamic_theme(
+            client, strategy, mode, angle_combo, past_note_records, combination, best_post_type_hint
+        )
+    except ThemeGenerationError as e:
+        print(f"[generate_note] テーマ動的生成に失敗: {e}", flush=True)
+        notify_slack_note_generation_failure(
+            stage="テーマ動的生成（Claude APIまたはJSONパース）",
+            mode=mode,
+            error=str(e),
+        )
+        raise SystemExit(1)
     print(f"[generate_note] テーマ動的生成: {theme_label}｜{theme_desc}")
 
     if mode == "free":

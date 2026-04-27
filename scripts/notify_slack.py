@@ -88,6 +88,38 @@ def notify_slack_note(title: str, mode: str, github_url: str) -> None:
     ])
 
 
+def notify_slack_note_generation_failure(stage: str, mode: str, error: str) -> None:
+    """note生成パイプラインの致命的失敗をSlackに通知（メンション付き）。
+    stage: 失敗工程名（例: "テーマ動的生成（JSONパース）"）
+    mode:  free / paid
+    error: 例外メッセージや失敗理由の詳細（長い場合は先頭500字に切り詰める）"""
+    mode_label = "無料note" if mode == "free" else "有料note"
+    mention = _user_mention_prefix()
+    error_excerpt = (error or "（詳細なし）").strip()
+    if len(error_excerpt) > 500:
+        error_excerpt = error_excerpt[:500] + "…"
+    _post_to_slack([
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": f"❌ note生成失敗（{mode_label}）"},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"{mention}*失敗工程:* {stage}"},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*原因:*\n```\n{error_excerpt}\n```"},
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": "🔧 ワークフローログを確認し、必要に応じて手動で再実行してください"}
+            ],
+        },
+    ])
+
+
 def notify_slack_note_analysis(date_str: str, github_url: str, summary: str = "") -> None:
     """note週次分析レポート完成をSlackに通知。サマリー（200字以内）＋GitHubレポートURLを送信。"""
     mention = _user_mention_prefix()
