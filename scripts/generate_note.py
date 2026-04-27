@@ -329,7 +329,6 @@ def propose_dynamic_theme(
     client: anthropic.Anthropic,
     strategy: dict,
     mode: str,
-    angle_combo: dict | None,
     past_records: list[dict],
     combination: dict,
     best_post_type_hint: str = "",
@@ -337,22 +336,16 @@ def propose_dynamic_theme(
     """その日のnote記事テーマを Claude API に提案させる。
     ペルソナ・コンセプト・商品から逆算し、過去テーマと重複しない切り口を1つ返させる。
 
+    angle_combo（pain/場面/現れ方）はテーマ生成側に渡さない。
+    Pythonで事前選択した切り口を見せると Claude がそこに引っ張られて
+    テーマの自由度が落ちるため、本記事生成側にだけ注入する。
+
     Returns: (theme_label, theme_description)
     生成失敗時は ThemeGenerationError を送出する（呼び出し側で Slack 通知＋停止）。
     """
     positioning = strategy["positioning"]
     persona = strategy["persona"]
     past_themes_text = build_past_themes_avoid_section(past_records)
-
-    angle_text = ""
-    if angle_combo:
-        angle_text = (
-            f"- pain_point: {angle_combo['pain_point']}\n"
-            f"- 場面: {angle_combo['situation']}\n"
-            f"- 現れ方: {angle_combo['manifestation']}"
-        )
-    else:
-        angle_text = "（切り口未指定）"
 
     mode_directive = (
         "無料記事のテーマ。ペルソナの悩みに直接刺さり、SNS流入から有料コンテンツへの導線として機能する切り口を選ぶ。"
@@ -373,9 +366,6 @@ def propose_dynamic_theme(
 ペルソナの悩み:
 {chr(10).join(f"- {p}" for p in persona["pain_points"])}
 
-【今回の切り口（Python側で事前選択済み）】
-{angle_text}
-
 【今回採用する記事構成型】{combination["name"]}（目標: {combination["target_goal"]}）
 
 【モード別方針】
@@ -383,11 +373,11 @@ def propose_dynamic_theme(
 
 【参考: 直近Threadsで最も反応の高かった投稿タイプ】{best_post_type_hint or "（データなし）"}
 
-【過去noteで扱ったテーマ（重複回避）】
+【過去noteで扱ったテーマ】
 {past_themes_text}
 
 【テーマ提案のルール】
-- 大テーマの粒度（例: 行動設計 / 環境設計 / 回復設計 / 判断疲れの解消 / キャリア設計）を機械的に繰り返すのではなく、商品・コンセプト・ペルソナのpain_pointから逆算し、毎回違う切り口で 1 つ生成すること
+- 商品・コンセプト・ペルソナのpain_pointから逆算し、毎回違う切り口で 1 つ生成すること
 - 上記の「過去noteで扱ったテーマ」と意味的に被らないテーマにする（同じ単語の言い換えだけの近接テーマは避ける）
 - pain_point を中心テーマに据え、商品の世界観（成果は落とさず家族時間を取り戻す／設計で解決する）に整合させる
 - 抽象的な大テーマ（例: 「働き方について」）ではなく、記事1本で扱える具体的な切り口にする
@@ -726,7 +716,7 @@ def main():
         best_post_type_hint = " > ".join(_POST_TYPE_LABELS.get(t, t) for t in seen_pt)
     try:
         theme_label, theme_desc = propose_dynamic_theme(
-            client, strategy, mode, angle_combo, past_note_records, combination, best_post_type_hint
+            client, strategy, mode, past_note_records, combination, best_post_type_hint
         )
     except ThemeGenerationError as e:
         print(f"[generate_note] テーマ動的生成に失敗: {e}", flush=True)
