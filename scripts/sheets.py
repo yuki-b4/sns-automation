@@ -47,6 +47,7 @@ def append_note_record(record: dict) -> None:
           | combination_pattern | title_type | hook_type | problem_type | solution_type
           | ref_threads_post_ids | views | likes | comments | selling_elements
           | selected_pain_point | selected_situation | selected_manifestation
+          | theme_label | theme_description
     """
     if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
         print("[Sheets] 認証情報が未設定のためスキップ")
@@ -76,6 +77,8 @@ def append_note_record(record: dict) -> None:
         record.get("selected_pain_point", ""),       # S: Pythonが事前選択したpain_point
         record.get("selected_situation", ""),        # T: Pythonが事前選択した場面
         record.get("selected_manifestation", ""),    # U: Pythonが事前選択した現れ方
+        record.get("theme_label", ""),               # V: Claudeが動的生成したテーマラベル
+        record.get("theme_description", ""),         # W: Claudeが動的生成したテーマ概要
     ]
     sheet.append_row(row, value_input_option="RAW")
     print(f"[Sheets] note投稿DB記録: {record.get('type')} / {record.get('combination_pattern')} / {record.get('title')}")
