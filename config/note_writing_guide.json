@@ -182,13 +182,12 @@
   },
 
   "combination_patterns": {
-    "description": "タイトル・フック・課題・解決法の4要素を組み合わせた5パターン。テーマローテーション（day_of_year % 5）と1:1対応。毎日自動選択され、週次分析でパフォーマンスをフィードバックする。",
+    "description": "タイトル・フック・課題・解決法の4要素を組み合わせた5パターン。記事の文体・構成型を決める。Threads ER 上位 post_type に応じて選択（generate_note.py の _POST_TYPE_TO_COMBINATION_INDEX）。記事の内容軸（テーマ）は別途 Claude API で動的生成する。",
     "patterns": [
       {
         "index": 0,
         "id": "empathy_max",
         "name": "共感最大化",
-        "theme": "行動設計",
         "target_goal": "いいね・シェア最大化 / SNSからの流入促進",
         "title_type": "共感直球型",
         "hook_type": "失敗談型",
@@ -206,7 +205,6 @@
         "index": 1,
         "id": "trust_builder",
         "name": "信頼構築",
-        "theme": "環境設計",
         "target_goal": "専門性・権威性の証明 / 有料コンテンツへの転換率向上",
         "title_type": "数字型",
         "hook_type": "数字インパクト型",
@@ -224,7 +222,6 @@
         "index": 2,
         "id": "action_driver",
         "name": "行動変容",
-        "theme": "回復設計",
         "target_goal": "「明日から試せる」感の最大化 / 実践コメントの増加",
         "title_type": "ベネフィット直球型",
         "hook_type": "問題提起型",
@@ -242,7 +239,6 @@
         "index": 3,
         "id": "fan_builder",
         "name": "ファン化",
-        "theme": "判断疲れの解消",
         "target_goal": "著者への親近感・信頼形成 / フォロワー増加",
         "title_type": "ターゲット明示型",
         "hook_type": "場面描写型",
@@ -260,7 +256,6 @@
         "index": 4,
         "id": "curiosity_trigger",
         "name": "知的好奇心",
-        "theme": "キャリア設計",
         "target_goal": "業界認知・権威確立 / 思考が変わるコメントの増加",
         "title_type": "逆説型",
         "hook_type": "逆説型",
