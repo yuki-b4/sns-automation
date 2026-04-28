@@ -17,6 +17,7 @@ POST_TYPE_LABELS = {
     "personal": "自己開示系",
     "opinion": "業界考察系",
     "dialogue": "対話系",
+    "note_promo": "note誘導系",
 }
 
 
@@ -190,6 +191,28 @@ def notify_slack_duplicate_warning(new_content: str, similar_content: str, score
         },
     ])
     _post_to_slack(blocks)
+
+
+def notify_slack_note_promo_skip(reason: str, date_str: str) -> None:
+    """note誘導Threads投稿のスキップ通知（メンション付き）。
+    note原稿不在 / note投稿DB の url 未入力など、運用者の手当てが必要なケースで使う。"""
+    mention = _user_mention_prefix()
+    _post_to_slack([
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": "⏭️ note誘導Threads投稿をスキップ"},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"{mention}*対象日:* {date_str} (JST)\n*理由:* {reason}"},
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": "📝 note投稿DBの該当行に `url` 列を埋めるか、note原稿を確認してください"}
+            ],
+        },
+    ])
 
 
 def notify_slack_db_update_reminder(analysis_labels: list[str], run_time_label: str) -> None:

@@ -47,7 +47,9 @@ def append_note_record(record: dict) -> None:
           | combination_pattern | title_type | hook_type | problem_type | solution_type
           | ref_threads_post_ids | views | likes | comments | selling_elements
           | selected_pain_point | selected_situation | selected_manifestation
-          | theme_label | theme_description
+          | theme_label | theme_description | url
+    url 列（X列、ヘッダー名: url）は note.com への手動投稿後に運用者が記入する。
+    生成時の append では空欄のまま追記し、`get_note_url_by_date` から参照される。
     """
     if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
         print("[Sheets] 認証情報が未設定のためスキップ")
@@ -82,6 +84,30 @@ def append_note_record(record: dict) -> None:
     ]
     sheet.append_row(row, value_input_option="RAW")
     print(f"[Sheets] note投稿DB記録: {record.get('type')} / {record.get('combination_pattern')} / {record.get('title')}")
+
+
+def get_note_url_by_date(date_str: str, mode: str = "free") -> str | None:
+    """note投稿DB から `generated_at` が date_str (YYYY-MM-DD) で始まり type が mode の
+    レコードを探し、url 列の値を返す。該当行が無い／URL列が空なら None。
+    同日に複数行あるときは末尾（最新）の行を採用する。"""
+    if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
+        return None
+
+    client = get_client()
+    sheet = client.open_by_key(GOOGLE_SHEETS_ID).worksheet("note投稿DB")
+    records = sheet.get_all_records()
+
+    matched_url: str | None = None
+    for r in records:
+        if r.get("type") != mode:
+            continue
+        generated_at = str(r.get("generated_at", ""))
+        if not generated_at.startswith(date_str):
+            continue
+        url = str(r.get("url", "")).strip()
+        if url:
+            matched_url = url  # 後勝ちで最新の行を採用
+    return matched_url
 
 
 def get_note_records(weeks: int = 4) -> list[dict]:
