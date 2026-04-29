@@ -271,6 +271,7 @@ def main():
             print(f"[Threads] セルフリプライ1投稿成功: {reply_id}")
 
     # セルフリプライ2投稿（structure 3投稿構成）
+    reply2_id = None
     if reply_id and self_reply2:
         time.sleep(5)  # セルフリプライ1がThreads側で処理されるのを待つ
         reply2_id = post_to_threads(self_reply2, reply_to_id=reply_id)
@@ -293,7 +294,10 @@ def main():
         if score >= SIMILARITY_THRESHOLD:
             notify_slack_duplicate_warning(content, most_similar["content"], score, most_similar.get("posted_at", ""))
 
-    # 投稿DBに記録
+    # 投稿DBに記録（ルート + セルフリプライをすべて記録し、メトリクス収集対象にする）
+    # parent_post_id にはスレッドのルート post_id（=threads_id）を入れる。
+    # セルフリプライ2はThreads側ではセルフリプライ1への返信だが、データ管理上の
+    # 「どのスレッドの返信か」はルートで揃える方が分析しやすいためルートIDを採用。
     now = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
     week_number = now.isocalendar()[1]
     records = []
@@ -305,6 +309,27 @@ def main():
             "content": content,
             "posted_at": now.isoformat(),
             "week_number": week_number,
+            "parent_post_id": "",
+        })
+    if reply_id:
+        records.append({
+            "post_id": reply_id,
+            "platform": "threads",
+            "post_type": post_type,
+            "content": self_reply,
+            "posted_at": now.isoformat(),
+            "week_number": week_number,
+            "parent_post_id": threads_id,
+        })
+    if reply2_id:
+        records.append({
+            "post_id": reply2_id,
+            "platform": "threads",
+            "post_type": post_type,
+            "content": self_reply2,
+            "posted_at": now.isoformat(),
+            "week_number": week_number,
+            "parent_post_id": threads_id,
         })
     # if linkedin_id:  # LinkedIn 一時無効化
     #     records.append({
@@ -314,6 +339,7 @@ def main():
     #         "content": content,
     #         "posted_at": now.isoformat(),
     #         "week_number": week_number,
+    #         "parent_post_id": "",
     #     })
     for record in records:
         append_post_record(record)

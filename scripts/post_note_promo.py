@@ -168,6 +168,7 @@ def main() -> None:
     # 5) Threads へ3段階投稿
     threads_id = post_to_threads(content)
     reply_id = None
+    reply2_id = None
     if threads_id and self_reply:
         time.sleep(5)  # 本文コンテナの処理完了を待つ
         reply_id = post_to_threads(self_reply, reply_to_id=threads_id)
@@ -188,15 +189,38 @@ def main() -> None:
     )
     notify_slack(slack_content, POST_TYPE, title="note誘導Threads投稿完了")
 
-    # 7) 投稿DB記録
+    # 7) 投稿DB記録（ルート + セルフリプライをすべて記録、メトリクス収集対象にする）
+    posted_at_iso = now.isoformat()
+    week_number = now.isocalendar()[1]
     if threads_id:
         append_post_record({
             "post_id": threads_id,
             "platform": "threads",
             "post_type": POST_TYPE,
             "content": content,
-            "posted_at": now.isoformat(),
-            "week_number": now.isocalendar()[1],
+            "posted_at": posted_at_iso,
+            "week_number": week_number,
+            "parent_post_id": "",
+        })
+    if reply_id:
+        append_post_record({
+            "post_id": reply_id,
+            "platform": "threads",
+            "post_type": POST_TYPE,
+            "content": self_reply,
+            "posted_at": posted_at_iso,
+            "week_number": week_number,
+            "parent_post_id": threads_id,
+        })
+    if reply2_id:
+        append_post_record({
+            "post_id": reply2_id,
+            "platform": "threads",
+            "post_type": POST_TYPE,
+            "content": self_reply2,
+            "posted_at": posted_at_iso,
+            "week_number": week_number,
+            "parent_post_id": threads_id,
         })
 
     print("[note_promo] 投稿・通知・DB記録が完了しました")
