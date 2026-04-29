@@ -22,7 +22,14 @@ def get_client():
 
 
 def append_post_record(record: dict) -> None:
-    """投稿DBにレコードを追加（Sheet1）"""
+    """投稿DBにレコードを追加（Sheet1）
+
+    列構成: A: post_id | B: platform | C: post_type | D: content | E: posted_at
+          | F: week_number | G: parent_post_id
+
+    parent_post_id はセルフリプライのとき、所属するスレッドのルート投稿の post_id を入れる。
+    ルート投稿（=スレッドの起点）の場合は空欄。
+    """
     if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
         print("[Sheets] 認証情報が未設定のためスキップ")
         return
@@ -36,9 +43,12 @@ def append_post_record(record: dict) -> None:
         record.get("content", ""),
         record.get("posted_at", ""),
         record.get("week_number", ""),
+        record.get("parent_post_id", ""),
     ]
     sheet.append_row(row, value_input_option="RAW")
-    print(f"[Sheets] 投稿DB記録: {record['platform']} / {record['post_id']}")
+    parent = record.get("parent_post_id", "")
+    suffix = f" (reply→{parent})" if parent else ""
+    print(f"[Sheets] 投稿DB記録: {record['platform']} / {record['post_id']}{suffix}")
 
 
 def append_note_record(record: dict) -> None:
@@ -132,7 +142,14 @@ def get_note_records(weeks: int = 4) -> list[dict]:
 
 
 def bulk_upsert_metrics_records(records: list[dict]) -> None:
-    """メトリクスDBのレコードを一括upsert（読み取り1回・post_idで末尾行を上書き）"""
+    """メトリクスDBのレコードを一括upsert（読み取り1回・post_idで末尾行を上書き）
+
+    列構成: A: post_id | B: collected_at | C: likes | D: reposts | E: replies
+          | F: impressions | G: engagement_rate | H: parent_post_id
+
+    parent_post_id はセルフリプライ投稿のとき、所属するスレッドのルート投稿の
+    post_id を入れる。ルート投稿の場合は空欄。
+    """
     if not records:
         return
     if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
@@ -161,10 +178,11 @@ def bulk_upsert_metrics_records(records: list[dict]) -> None:
             record.get("replies", 0),
             record.get("impressions", 0),
             record.get("engagement_rate", 0.0),
+            record.get("parent_post_id", ""),
         ]
         normalized_id = _normalize_id(str(record.get("post_id", "")))
         if normalized_id in id_to_row:
-            batch_updates.append({"range": f"A{id_to_row[normalized_id]}:G{id_to_row[normalized_id]}", "values": [row]})
+            batch_updates.append({"range": f"A{id_to_row[normalized_id]}:H{id_to_row[normalized_id]}", "values": [row]})
         else:
             to_append.append(row)
 
@@ -218,7 +236,10 @@ def mark_competitor_posts_analyzed(row_numbers: list[int]) -> None:
 
 
 def get_recent_posts_content(days: int = 14) -> list[dict]:
-    """直近N日分の投稿テキストを投稿DBから取得（重複チェック・プロンプト注入用）"""
+    """直近N日分の投稿テキストを投稿DBから取得（重複チェック・プロンプト注入用）
+
+    セルフリプライ（parent_post_id を持つ行）は除外し、ルート投稿のみ返す。
+    類似度判定・プロンプトに過去のリプライ本文が混ざるのを防ぐ。"""
     if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
         return []
 
@@ -233,6 +254,8 @@ def get_recent_posts_content(days: int = 14) -> list[dict]:
 
     result = []
     for r in records:
+        if str(r.get("parent_post_id", "")).strip():
+            continue
         if r.get("platform") == "threads" and r.get("content") and _is_recent(r.get("posted_at", ""), cutoff):
             result.append({
                 "content": r["content"],
@@ -243,7 +266,11 @@ def get_recent_posts_content(days: int = 14) -> list[dict]:
 
 
 def get_recent_post_ids(days: int = 2) -> list[dict]:
-    """直近N日分の投稿IDを投稿DBから取得"""
+    """直近N日分の投稿IDを投稿DBから取得
+
+    返り値の各要素は parent_post_id（セルフリプライの場合は所属スレッドのルート post_id、
+    ルート投稿の場合は空文字列）も持つ。collect_metrics 側で メトリクスDB に
+    引き継ぐ。"""
     if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
         return []
 
@@ -259,14 +286,24 @@ def get_recent_post_ids(days: int = 2) -> list[dict]:
             try:
                 posted_at = datetime.datetime.fromisoformat(r["posted_at"])
                 if posted_at >= cutoff:
-                    result.append({"post_id": _normalize_id(r["post_id"]), "platform": r["platform"]})
+                    parent_raw = str(r.get("parent_post_id", "")).strip()
+                    parent_normalized = _normalize_id(parent_raw) if parent_raw else ""
+                    result.append({
+                        "post_id": _normalize_id(r["post_id"]),
+                        "platform": r["platform"],
+                        "parent_post_id": parent_normalized,
+                    })
             except Exception:
                 pass
     return result
 
 
 def get_weekly_data(weeks: int = 1, days: int | None = None) -> dict:
-    """過去N週分（またはN日分）の投稿・メトリクスデータを返す"""
+    """過去N週分（またはN日分）の投稿・メトリクスデータを返す
+
+    投稿DBのセルフリプライ行（parent_post_id を持つ行）は除外し、ルート投稿のみ返す。
+    週次レポートやnote分析が ER をルート投稿基準で集計するための仕様。返信単位の分析が
+    必要になったら別関数を追加すること。"""
     if not GOOGLE_SHEETS_ID or not GOOGLE_SERVICE_ACCOUNT_JSON:
         return {"posts": [], "metrics": []}
 
@@ -280,7 +317,8 @@ def get_weekly_data(weeks: int = 1, days: int | None = None) -> dict:
     cutoff = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9))) - delta
     recent_posts = [
         {**p, "post_id": _normalize_id(p["post_id"])}
-        for p in posts if _is_recent(p.get("posted_at", ""), cutoff)
+        for p in posts
+        if _is_recent(p.get("posted_at", ""), cutoff) and not str(p.get("parent_post_id", "")).strip()
     ]
     post_ids = {p["post_id"] for p in recent_posts}
     recent_metrics = [
