@@ -1,7 +1,9 @@
-name: Note Promo Threads (Daily 20:00 JST)
+name: Note Promo Threads (Every 3 days 20:00 JST)
 
 # 当日生成した無料note記事（output/notes/YYYY-MM-DD_free.md）を読みたくさせる
-# 3投稿構成スレッド（フック本文 → 補足リプライ1 → URL単独リプライ）を毎日20:00 JSTに配信する。
+# 3投稿構成スレッド（フック本文 → 補足リプライ1 → URL単独リプライ）を3日に1回 20:00 JSTに配信する。
+# - cronは毎日起動するが、スクリプト側で date.toordinal() % 3 == 0 の日のみ実投稿する
+#   （月末/年末を跨いでも常に3日間隔を維持するため）。
 # - 当日のnote原稿が無い、または note投稿DB の url 列が空ならスクリプト側でスキップしSlack通知。
 on:
   schedule:

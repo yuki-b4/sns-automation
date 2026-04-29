@@ -1,14 +1,20 @@
 """
-note誘導用Threads投稿スクリプト（毎日20:00 JST）
+note誘導用Threads投稿スクリプト（3日に1回 20:00 JST）
 当日生成した無料note記事を読みたくさせる目的で、3投稿構成のスレッドを配信する。
 
 - 本文        : note記事を読みたくさせる爬虫類脳直撃のフック（ベネフィット or ペイン提示）
 - 補足リプライ1: フックを一段深掘りし、URL を踏ませる動機を最大化する続きの一手
 - 補足リプライ2: noteのURLのみ（Claudeを通さず、note投稿DBの url 列をそのまま貼る）
 
-スキップ条件（どちらかに該当したら投稿せずSlackで運用者に通知して終了）:
-- 当日の output/notes/YYYY-MM-DD_free.md が存在しない
-- note投稿DBの当日 free レコードの url 列が空 / 該当行が存在しない
+実行頻度:
+- ワークフローは毎日 20:00 JST に起動するが、本スクリプトは date.toordinal() % 3 == 0 の日のみ
+  実投稿を行う。月末/年末を跨いでも常に3日間隔を維持するため、cron の `*/3` ではなく
+  通日ベースの剰余で制御する。
+
+スキップ条件（いずれかに該当したら投稿せず終了）:
+- 当日が3日サイクルの実行日でない（Slack通知なし、ログのみ）
+- 当日の output/notes/YYYY-MM-DD_free.md が存在しない（Slack通知あり）
+- note投稿DBの当日 free レコードの url 列が空 / 該当行が存在しない（Slack通知あり）
 
 通常の投稿フローに倣い preflight → 生成 → Threads投稿 → Slack通知 → 投稿DB記録 の順で処理する。
 本スクリプトの本文・補足リプライ1のスタイルは generate_post.py のルールを継承せず、
@@ -125,6 +131,11 @@ def _generate_hook(strategy: dict, note_markdown: str) -> dict:
 def main() -> None:
     now = _today_jst()
     date_str = now.date().isoformat()
+
+    # 0) 3日に1回の頻度制御（通日ordinalの剰余で月跨ぎも一定間隔を維持）
+    if now.date().toordinal() % 3 != 0:
+        print(f"[note_promo] {date_str} は3日サイクルの実行日ではありません。スキップします。")
+        return
 
     # 1) 当日のnote原稿チェック（無ければスキップ通知して終了）
     note_markdown = _load_today_note(date_str)

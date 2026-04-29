@@ -90,8 +90,9 @@ gspread は数値IDを科学表記に暗黙変換するため、`sheets._normali
 - `analyze_note_performance.py` は同様に `output/reports/YYYY-MM-DD_note_analysis.md` をコミット。
 - Slack 通知では本文全文は送らず GitHub blob URL を送る（トークン節約 + note は手動で note.com に投稿する運用のため）。
 
-### note誘導Threads配信（毎日20:00 JST）
+### note誘導Threads配信（3日に1回 20:00 JST）
 `scripts/post_note_promo.py` は当日の `output/notes/YYYY-MM-DD_free.md` を読み、note記事を読みたくさせる「フック本文＋補足リプライ1＋URL単独リプライ2」の3投稿構成スレッドを配信する。
+- 配信頻度は **3日に1回**。cron は毎日 20:00 JST に起動するが、スクリプト先頭で `date.toordinal() % 3 != 0` の日はSlack通知なしで即終了する。`*/3` 系cronだと月末で間隔が崩れる（例: 31日→翌月1日が1日間隔）ため、通日ordinal剰余で常に3日固定間隔を維持する設計。頻度を変える場合はスクリプトの剰余条件を編集する。
 - URLは Claude を通さず、note投稿DB の **`url` 列**（手動入力、generated_at 当日かつ type=free の行）から取得する（`sheets.get_note_url_by_date`）。
 - 当日note原稿が無い／URL列が空のいずれかに該当した場合、preflight および Claude API 呼び出しの**前**にスキップ判定し、`notify_slack_note_promo_skip`（メンション付き）で運用者に通知して終了する（無駄課金防止）。
 - 本スクリプトのフック設計ルールは `generate_post.py` の共通ルールを継承せず、**この用途専用の独立した「爬虫類脳直撃のフック」プロンプト**を持つ。投稿スタイルを統一しに行かないこと（誘導目的が異なる）。
@@ -132,7 +133,7 @@ Python スクリプトからこの DB を触る予定ができるまで、関心
 | post_1145.yml | 毎日 11:45 | 1 | 投稿生成・配信（フック形式スロット） |
 | post_1515.yml | （スケジュール停止中、手動のみ） | 2 | 投稿生成・配信 |
 | post_1805.yml | 毎日 18:05 | 3 | 投稿生成・配信 |
-| note_promo.yml | 毎日 20:00 | — | 当日free noteを読みたくさせる3投稿構成スレッド（フック→補足→URL単独）|
+| note_promo.yml | 3日に1回 20:00（cronは毎日／scriptが date.toordinal() % 3 で間引き） | — | 当日free noteを読みたくさせる3投稿構成スレッド（フック→補足→URL単独）|
 | post_2100.yml | 毎日 21:02 | 4 | 投稿生成・配信 |
 | daily_metrics.yml | 毎日 06:00 | — | 直近30日分のメトリクス upsert |
 | competitor.yml | 火・金 08:00 | — | 競合投稿DB の未分析行を分析 |
