@@ -1,13 +1,13 @@
-name: Note Promo Posts (Apr 21-23, 2026)
+name: Note Promo Threads (Every 3 days 20:00 JST)
 
-# note記事『頑張れてしまう人ほど働き方を変えられない理由』への誘導布石投稿を
-# 2026-04-21 / 04-22 / 04-23 の各 21:00 JST (= 12:00 UTC) に1本ずつ配信する。
-# - cron は 4月 21-23 日の 12:00 UTC で発火（年指定はできないため毎年発火し得る）
-# - スクリプト側で config/note_promo_posts.json の日付に一致しないと no-op 終了
-# - 2026-04-23 の投稿が完了したら、このワークフローファイルごと削除して構わない
+# 当日生成した無料note記事（output/notes/YYYY-MM-DD_free.md）を読みたくさせる
+# 3投稿構成スレッド（フック本文 → 補足リプライ1 → URL単独リプライ）を3日に1回 20:00 JSTに配信する。
+# - cronは毎日起動するが、スクリプト側で date.toordinal() % 3 == 0 の日のみ実投稿する
+#   （月末/年末を跨いでも常に3日間隔を維持するため）。
+# - 当日のnote原稿が無い、または note投稿DB の url 列が空ならスクリプト側でスキップしSlack通知。
 on:
   schedule:
-    - cron: '0 12 21-23 4 *'  # UTC 12:00 (= JST 21:00), April 21-23
+    - cron: '0 11 * * *'  # UTC 11:00 = JST 20:00
   workflow_dispatch:
 
 jobs:

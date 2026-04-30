@@ -96,6 +96,7 @@ def main():
     for item in post_ids:
         post_id = item["post_id"]
         platform = item["platform"]
+        parent_post_id = item.get("parent_post_id", "")
 
         if platform == "threads":
             metrics = collect_threads_metrics(post_id)
@@ -106,8 +107,10 @@ def main():
 
         if metrics:
             metrics["collected_at"] = now
+            metrics["parent_post_id"] = parent_post_id
             collected.append(metrics)
-            print(f"[Metrics] 取得完了: {platform} / {post_id} / ER={metrics['engagement_rate']}")
+            reply_marker = f" (reply→{parent_post_id})" if parent_post_id else ""
+            print(f"[Metrics] 取得完了: {platform} / {post_id}{reply_marker} / ER={metrics['engagement_rate']}")
 
     bulk_upsert_metrics_records(collected)
     print(f"[Metrics] 収集完了（{len(collected)}件記録）")

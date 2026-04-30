@@ -17,6 +17,7 @@ POST_TYPE_LABELS = {
     "personal": "自己開示系",
     "opinion": "業界考察系",
     "dialogue": "対話系",
+    "note_promo": "note誘導系",
 }
 
 
@@ -83,6 +84,38 @@ def notify_slack_note(title: str, mode: str, github_url: str) -> None:
             "type": "context",
             "elements": [
                 {"type": "mrkdwn", "text": "✏️ 確認・微修正後、note.comに手動で投稿してください"}
+            ],
+        },
+    ])
+
+
+def notify_slack_note_generation_failure(stage: str, mode: str, error: str) -> None:
+    """note生成パイプラインの致命的失敗をSlackに通知（メンション付き）。
+    stage: 失敗工程名（例: "テーマ動的生成（JSONパース）"）
+    mode:  free / paid
+    error: 例外メッセージや失敗理由の詳細（長い場合は先頭500字に切り詰める）"""
+    mode_label = "無料note" if mode == "free" else "有料note"
+    mention = _user_mention_prefix()
+    error_excerpt = (error or "（詳細なし）").strip()
+    if len(error_excerpt) > 500:
+        error_excerpt = error_excerpt[:500] + "…"
+    _post_to_slack([
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": f"❌ note生成失敗（{mode_label}）"},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"{mention}*失敗工程:* {stage}"},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*原因:*\n```\n{error_excerpt}\n```"},
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": "🔧 ワークフローログを確認し、必要に応じて手動で再実行してください"}
             ],
         },
     ])
@@ -158,6 +191,28 @@ def notify_slack_duplicate_warning(new_content: str, similar_content: str, score
         },
     ])
     _post_to_slack(blocks)
+
+
+def notify_slack_note_promo_skip(reason: str, date_str: str) -> None:
+    """note誘導Threads投稿のスキップ通知（メンション付き）。
+    note原稿不在 / note投稿DB の url 未入力など、運用者の手当てが必要なケースで使う。"""
+    mention = _user_mention_prefix()
+    _post_to_slack([
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": "⏭️ note誘導Threads投稿をスキップ"},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"{mention}*対象日:* {date_str} (JST)\n*理由:* {reason}"},
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": "📝 note投稿DBの該当行に `url` 列を埋めるか、note原稿を確認してください"}
+            ],
+        },
+    ])
 
 
 def notify_slack_db_update_reminder(analysis_labels: list[str], run_time_label: str) -> None:

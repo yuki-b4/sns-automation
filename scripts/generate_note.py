@@ -16,22 +16,13 @@ import datetime
 import anthropic
 from collections import defaultdict
 from sheets import get_weekly_data, append_note_record, get_note_records
-from notify_slack import notify_slack_note
+from notify_slack import notify_slack_note, notify_slack_note_generation_failure
 from token_cost import log_token_cost
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 STRATEGY_PATH = os.path.join(SCRIPT_DIR, "../config/strategy.json")
 NOTE_GUIDE_PATH = os.path.join(SCRIPT_DIR, "../config/note_writing_guide.json")
 OUTPUT_DIR = os.path.join(SCRIPT_DIR, "../output/notes")
-
-# 5テーマのローテーション（day_of_year % 5 で決定）
-NOTE_THEMES = [
-    ("行動設計", "判断の優先順位設計と意思決定の自動化により、残業ゼロで成果を出す行動プロトコル"),
-    ("環境設計", "Slack・通知・会議構造を最適化して集中環境を構築し、深い仕事を守る仕組み"),
-    ("回復設計", "睡眠・休息を構造化してパフォーマンスを持続させる、脳科学に基づくリカバリー設計"),
-    ("判断疲れの解消", "判断コストを定量化して削減することで、金曜午後まで認知負荷を維持する方法"),
-    ("キャリア設計", "珈琲屋→エンジニア→コーチの異色経験から生まれた、才能不要の働き方設計メソッド全体像"),
-]
 
 
 def load_strategy() -> dict:
@@ -196,11 +187,48 @@ def _find_pattern(patterns: list[dict], type_name: str) -> dict:
     return next((p for p in patterns if p.get("type") == type_name), {})
 
 
+def _format_high_performance_block(guide: dict, combination: dict) -> str:
+    """high_performance_patterns のうち、現在の combination_id に紐づく必須要素だけを注入する。
+    全 combination で常時注入はしないでトークン肥大を避ける。"""
+    hp_section = guide.get("high_performance_patterns") or {}
+    cid = combination.get("id", "")
+    for key, body in hp_section.items():
+        if key == "description":
+            continue
+        if not isinstance(body, dict):
+            continue
+        if body.get("applies_to_combination_id") != cid:
+            continue
+        elements = body.get("required_elements") or []
+        if not elements:
+            continue
+        bullet = "\n".join(f"- {e}" for e in elements)
+        return (
+            f"\n【高エンゲージメント実証パターン：{body.get('description', '')}】"
+            f"（{body.get('evidence', '')}）\n"
+            f"必須要素（全て満たすこと）:\n{bullet}"
+        )
+    return ""
+
+
+def _format_handoff_block(guide: dict) -> str:
+    """engagement_design_rules.threads_to_note_handoff を全 combination 共通で注入する。"""
+    rules = guide.get("engagement_design_rules") or {}
+    handoff = rules.get("threads_to_note_handoff") or {}
+    if not handoff:
+        return ""
+    return (
+        f"\n【Threads→note 引き継ぎ設計】{handoff.get('rule', '')}\n"
+        f"実装: {handoff.get('implementation', '')}"
+    )
+
+
 def format_writing_guide(guide: dict, combination: dict) -> str:
     """note執筆ガイドをプロンプト注入用テキストに変換。
     combinationで指定された4型（title/hook/problem/solution）だけを展開し、
     21パターン全展開を避けてトークンを大幅削減する。
-    engagement_principles・structure_templateは combination の指示でカバーされるため注入しない。"""
+    engagement_principles・structure_templateは combination の指示でカバーされるため注入しない。
+    curiosity_trigger 採用時は high_performance_patterns の必須要素も追記する。"""
     lines: list[str] = []
 
     # 当日採用する4型のみ展開
@@ -225,6 +253,14 @@ def format_writing_guide(guide: dict, combination: dict) -> str:
         lines.append(f"例: {sp['example']}")
     lines.append("解決法NG: " + " / ".join(guide["solution_presentation_rules"]["avoid"]))
 
+    hp_block = _format_high_performance_block(guide, combination)
+    if hp_block:
+        lines.append(hp_block)
+
+    handoff_block = _format_handoff_block(guide)
+    if handoff_block:
+        lines.append(handoff_block)
+
     return "\n".join(lines)
 
 
@@ -237,14 +273,17 @@ _POST_TYPE_LABELS = {
     "dialogue":   "対話系（読者への問いかけ・エンゲージメント促進）",
 }
 
-# Threads post_type → note combination index のマッピング
-# 「最も反応が高かった投稿の種類」からnote記事の方向性を決定する
-_POST_TYPE_TO_COMBINATION_INDEX = {
-    "structure":  1,  # 体系化系  → 信頼構築（数字×根拠）
-    "opinion":    4,  # 業界考察系 → 知的好奇心（逆説×設計図）
-    "personal":   0,  # 自己開示系 → 共感最大化（失敗談×Before/After）
-    "permission": 0,  # 許可系    → 共感最大化（感情共鳴）
-    "dialogue":   3,  # 対話系    → ファン化（場面描写×プロトコル）
+# Threads post_type → note combination id のマッピング
+# 「最も反応が高かった投稿の種類」からnote記事の方向性を決定する。
+# index ではなく id で参照する（combination_patterns.patterns の並び順変更に強くする）。
+# permission を empathy_max → curiosity_trigger に振替（2026-04-27分析: 共感最大化6本量産でも閲覧16.3。
+# 許可系は「頑張らなくていい」自体が逆説的価値観のため知的好奇心と相性が良い）。
+_POST_TYPE_TO_COMBINATION_ID = {
+    "structure":  "trust_builder",      # 体系化系  → 信頼構築（場面描写×根拠）
+    "opinion":    "curiosity_trigger",  # 業界考察系 → 知的好奇心（逆説×設計図）
+    "personal":   "empathy_max",        # 自己開示系 → 共感最大化（失敗談×構造分析）
+    "permission": "curiosity_trigger",  # 許可系    → 知的好奇心（逆説×設計図）
+    "dialogue":   "fan_builder",        # 対話系    → ファン化（場面描写×プロトコル）
 }
 
 
@@ -263,18 +302,70 @@ def annotate_posts_with_metrics(posts: list[dict], metrics: list[dict]) -> list[
     return sorted(annotated, key=lambda p: p["_engagement_rate"], reverse=True)
 
 
-def determine_theme_and_combination(
+def _filter_eligible_patterns(patterns: list[dict], mode: str) -> list[dict]:
+    """combination_patterns を mode (free/paid) で絞り込む。
+    available_modes が未指定のものは両方で許可する旧来挙動に従う。"""
+    eligible: list[dict] = []
+    for p in patterns:
+        modes = p.get("available_modes") or ["free", "paid"]
+        if mode in modes:
+            eligible.append(p)
+    return eligible
+
+
+def _count_recent_combinations(past_records: list[dict], days: int, patterns: list[dict]) -> dict[str, int]:
+    """過去N日に生成された note の combination_id 別カウント。
+    旧データに combination_id が無い場合は combination_pattern (日本語名) → id にフォールバック解決。"""
+    if not past_records:
+        return {}
+    name_to_id = {p["name"]: p["id"] for p in patterns}
+    cutoff = (datetime.date.today() - datetime.timedelta(days=days)).isoformat()
+    counts: dict[str, int] = defaultdict(int)
+    for r in past_records:
+        gen_at = str(r.get("generated_at") or "")[:10]
+        if not gen_at or gen_at < cutoff:
+            continue
+        cid = (r.get("combination_id") or "").strip()
+        if not cid:
+            cid = name_to_id.get((r.get("combination_pattern") or "").strip(), "")
+        if cid:
+            counts[cid] += 1
+    return dict(counts)
+
+
+def determine_combination_pattern(
     guide: dict,
     posts: list[dict] | None = None,
     metrics: list[dict] | None = None,
-) -> tuple[str, str, dict, str]:
-    """テーマと組み合わせパターンを決定する。
-    メトリクスデータがあればエンゲージメント上位のpost_typeに基づき選択し、
-    データ不足の場合はday_of_yearローテーションにフォールバックする。
-    Returns: (theme_label, theme_desc, combination, selection_reason)
+    past_records: list[dict] | None = None,
+    mode: str = "free",
+) -> tuple[dict, str]:
+    """記事の構成型（タイトル型・フック型・課題型・解決法型の組み合わせ）を決定する。
+
+    Hybrid B 選択ロジック (2026-04-27分析の配分目標を反映):
+    1. mode に応じて使用可能パターンを絞り込む（free では action_driver を除外）
+    2. Threads ER 上位 post_type から第1候補を決定
+    3. 過去14日のカウントが weekly cap (例: empathy_max=2) を超えていたら次候補に進む
+    4. post_type 候補が尽きたら recommended_weight 降順でフォールバック
+    5. それでも全部キャップ超過なら最大ウェイトのパターンを採用（cap 無視）
+
+    記事の内容軸（テーマ）はここでは決めず、propose_dynamic_theme で別途生成する。
+    Returns: (combination, selection_reason)
     """
+    patterns = guide["combination_patterns"]["patterns"]
+    eligible = _filter_eligible_patterns(patterns, mode)
+    eligible_ids = {p["id"] for p in eligible}
+
+    distribution = guide.get("pattern_distribution") or {}
+    weekly_caps: dict[str, int] = (
+        distribution.get("free_mode_weekly_caps") or {}
+    ) if mode == "free" else {}
+
+    recent_counts = _count_recent_combinations(past_records or [], days=14, patterns=patterns)
+
+    # 第1群: post_type ER 順に対応する combination id を並べる
+    candidates: list[tuple[str, str]] = []
     if posts and metrics:
-        # post_type別の平均エンゲージメント率を計算
         type_scores: dict[str, list[float]] = defaultdict(list)
         metrics_map = {str(m.get("post_id", "")): m for m in metrics}
         for post in posts:
@@ -283,30 +374,177 @@ def determine_theme_and_combination(
             rate = float(m.get("engagement_rate", 0) or 0)
             if pt and rate > 0:
                 type_scores[pt].append(rate)
-
         if type_scores:
             avg_by_type = {pt: sum(v) / len(v) for pt, v in type_scores.items()}
-            best_type = max(avg_by_type, key=lambda t: avg_by_type[t])
-            best_avg = avg_by_type[best_type]
-            combo_index = _POST_TYPE_TO_COMBINATION_INDEX.get(
-                best_type, datetime.date.today().timetuple().tm_yday % len(NOTE_THEMES)
-            )
-            theme_label, theme_desc = NOTE_THEMES[combo_index]
-            combination = guide["combination_patterns"]["patterns"][combo_index]
-            reason = (
-                f"エンゲージメント最高post_type: {best_type} "
-                f"(avg {best_avg:.2%}, {len(type_scores[best_type])}件) "
-                f"→ {combination['name']}パターンを選択"
-            )
-            return theme_label, theme_desc, combination, reason
+            for pt, avg in sorted(avg_by_type.items(), key=lambda x: -x[1]):
+                cid = _POST_TYPE_TO_COMBINATION_ID.get(pt)
+                if cid and not any(c[0] == cid for c in candidates):
+                    candidates.append(
+                        (cid, f"post_type={pt} (ER avg {avg:.2%}, n={len(type_scores[pt])})")
+                    )
 
-    # フォールバック: day_of_yearローテーション
-    day_of_year = datetime.date.today().timetuple().tm_yday
-    theme_index = day_of_year % len(NOTE_THEMES)
-    theme_label, theme_desc = NOTE_THEMES[theme_index]
-    combination = guide["combination_patterns"]["patterns"][theme_index]
-    reason = f"メトリクスデータなし → ローテーション({theme_index}番目)を使用: {theme_label}"
-    return theme_label, theme_desc, combination, reason
+    # 第2群フォールバック: recommended_weight 降順
+    for p in sorted(eligible, key=lambda x: -float(x.get("recommended_weight", 0) or 0)):
+        cid = p["id"]
+        if not any(c[0] == cid for c in candidates):
+            w = float(p.get("recommended_weight", 0) or 0)
+            candidates.append((cid, f"weight fallback ({w:.0%})"))
+
+    # 候補を順番に評価し、mode で許可 & cap 未超過のものを採用
+    for cid, source in candidates:
+        if cid not in eligible_ids:
+            continue
+        cap = weekly_caps.get(cid)
+        cnt = recent_counts.get(cid, 0)
+        if cap is not None and cnt >= cap:
+            continue
+        combination = next(p for p in patterns if p["id"] == cid)
+        reason = (
+            f"{source} → {combination['name']}を選択"
+            f"（過去14日={cnt}本"
+            f"{'/cap='+str(cap) if cap is not None else ''}）"
+        )
+        return combination, reason
+
+    # 全候補が cap 超過 (異常時): 最大ウェイトのパターンを cap 無視で採用
+    fallback = sorted(eligible, key=lambda p: -float(p.get("recommended_weight", 0) or 0))[0]
+    return fallback, f"全候補がcap超過 → fallback採用: {fallback['name']}"
+
+
+def apply_mode_overrides(combination: dict, guide: dict, mode: str) -> dict:
+    """mode==paid のとき paid_mode_overrides.patterns[id] を combination にディープマージする。
+    free mode（または overrides 未定義）はそのまま返す。
+    instructions のような dict フィールドはネストしてマージする。"""
+    if mode != "paid":
+        return combination
+    overrides = (
+        (guide.get("paid_mode_overrides") or {})
+        .get("patterns", {})
+        .get(combination.get("id", ""), {})
+    )
+    if not overrides:
+        return combination
+    merged = dict(combination)
+    for k, v in overrides.items():
+        if k == "instructions" and isinstance(v, dict):
+            merged["instructions"] = {**combination.get("instructions", {}), **v}
+        else:
+            merged[k] = v
+    return merged
+
+
+def build_past_themes_avoid_section(past_records: list[dict]) -> str:
+    """Sheets履歴から直近のテーマ（theme_label）を抽出し、テーマ生成プロンプト用に整形する。
+    過去テーマと被らないテーマ案を Claude に提案させるための入力。"""
+    if not past_records:
+        return "（過去テーマ履歴なし）"
+    seen: set[str] = set()
+    lines: list[str] = []
+    for r in past_records:
+        label = (r.get("theme_label") or "").strip()
+        if not label or label in seen:
+            continue
+        seen.add(label)
+        date = (str(r.get("generated_at", "")) or "")[:10]
+        lines.append(f"- {date}｜{label}")
+    if not lines:
+        return "（過去テーマ履歴なし）"
+    return "\n".join(lines)
+
+
+class ThemeGenerationError(RuntimeError):
+    """テーマ動的生成の致命的失敗。フォールバックせず main() で Slack 通知＋停止する。"""
+
+
+def propose_dynamic_theme(
+    client: anthropic.Anthropic,
+    strategy: dict,
+    mode: str,
+    past_records: list[dict],
+    combination: dict,
+    best_post_type_hint: str = "",
+) -> tuple[str, str]:
+    """その日のnote記事テーマを Claude API に提案させる。
+    ペルソナ・コンセプト・商品から逆算し、過去テーマと重複しない切り口を1つ返させる。
+
+    angle_combo（pain/場面/現れ方）はテーマ生成側に渡さない。
+    Pythonで事前選択した切り口を見せると Claude がそこに引っ張られて
+    テーマの自由度が落ちるため、本記事生成側にだけ注入する。
+
+    Returns: (theme_label, theme_description)
+    生成失敗時は ThemeGenerationError を送出する（呼び出し側で Slack 通知＋停止）。
+    """
+    positioning = strategy["positioning"]
+    persona = strategy["persona"]
+    past_themes_text = build_past_themes_avoid_section(past_records)
+
+    mode_directive = (
+        "無料記事のテーマ。ペルソナの悩みに直接刺さり、SNS流入から有料コンテンツへの導線として機能する切り口を選ぶ。"
+        if mode == "free"
+        else "有料記事（¥1,980）のテーマ。商品『" + positioning.get("product_title", "") + "』の入り口として機能し、"
+             "「これは買う価値がある」と感じさせる具体性・独自性のある切り口を選ぶ。"
+    )
+
+    prompt = f"""あなたは note 記事の編集者です。以下の発信者情報・ペルソナ・商品から逆算し、本日生成する note 記事のテーマを 1 つだけ提案してください。
+
+【ポジショニング】{positioning["position"]}
+【コンセプト】{positioning["concept"]}
+【差別化】{positioning["differentiation"]}
+【売りたい商品】{positioning.get("product_title", "")}（{positioning.get("product_subtitle", "")}）
+【ステートメント】{positioning["statement"]}
+
+【ターゲット】{persona["description"]}
+ペルソナの悩み:
+{chr(10).join(f"- {p}" for p in persona["pain_points"])}
+
+【今回採用する記事構成型】{combination["name"]}（目標: {combination["target_goal"]}）
+
+【モード別方針】
+{mode_directive}
+
+【参考: 直近Threadsで最も反応の高かった投稿タイプ】{best_post_type_hint or "（データなし）"}
+
+【過去noteで扱ったテーマ】
+{past_themes_text}
+
+【テーマ提案のルール】
+- 商品・コンセプト・ペルソナのpain_pointから逆算し、毎回違う切り口で 1 つ生成すること
+- 上記の「過去noteで扱ったテーマ」と意味的に被らないテーマにする（同じ単語の言い換えだけの近接テーマは避ける）
+- pain_point を中心テーマに据え、商品の世界観（成果は落とさず家族時間を取り戻す／設計で解決する）に整合させる
+- 抽象的な大テーマ（例: 「働き方について」）ではなく、記事1本で扱える具体的な切り口にする
+- theme_label は 8〜18字程度、theme_description は 50〜90字で「この記事で何を扱い、読者にどんな変化を提供するか」を1〜2文で書く
+
+出力形式（他の説明・前置き不要・JSON のみ）:
+{{"theme_label": "（テーマラベル）", "theme_description": "（テーマの概要・記事で扱う具体的な内容と読者への変化）"}}"""
+
+    try:
+        message = client.messages.create(
+            model="claude-opus-4-7",
+            max_tokens=400,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except Exception as e:
+        raise ThemeGenerationError(f"Claude API呼び出しに失敗: {type(e).__name__}: {e}") from e
+
+    log_token_cost("claude-opus-4-7", message.usage, "generate_note_theme")
+    raw = message.content[0].text.strip()
+    # ```json などのフェンス除去
+    if raw.startswith("```"):
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ThemeGenerationError(
+            f"JSONパース失敗: {e}\n生成テキスト先頭500字: {raw[:500]}"
+        ) from e
+    label = (data.get("theme_label") or "").strip()
+    desc = (data.get("theme_description") or "").strip()
+    if not label or not desc:
+        raise ThemeGenerationError(
+            f"theme_label / theme_description が空または欠落。生成データ: {data}"
+        )
+    return label, desc
 
 
 def format_combination_instruction(combination: dict) -> str:
@@ -555,11 +793,23 @@ def main():
     recent_posts = annotate_posts_with_metrics(recent_posts_raw, recent_metrics)
     print(f"[generate_note] 過去7日Threads投稿: {len(recent_posts)}件 / メトリクスあり: {len(recent_metrics)}件")
 
-    # エンゲージメントデータからテーマ・組み合わせを決定
-    theme_label, theme_desc, combination, selection_reason = determine_theme_and_combination(
-        guide, recent_posts_raw, recent_metrics
+    # Sheets note投稿DBから過去4週・最大20件のレコードを取得
+    # combination 選択（14日カウント）と後段の重複回避（テーマ・切り口）の両方で使う
+    past_note_records = load_past_note_titles_from_sheets(weeks=4, limit=20)
+    print(f"[generate_note] Sheets note履歴: {len(past_note_records)}件 (切り口・テーマ重複回避＋配分判定用)")
+
+    # 記事の構成型（タイトル型・フック型・課題型・解決法型の組み合わせ）を決定
+    # 内容軸（テーマ）はここでは決めず、後段で Claude に動的生成させる
+    combination, selection_reason = determine_combination_pattern(
+        guide,
+        recent_posts_raw,
+        recent_metrics,
+        past_records=past_note_records,
+        mode=mode,
     )
-    print(f"[generate_note] テーマ選択: {selection_reason}")
+    # paid mode のときは paid_mode_overrides を適用（trust_builder の hook を「数字インパクト型」に戻す等）
+    combination = apply_mode_overrides(combination, guide, mode)
+    print(f"[generate_note] 構成型選択: {selection_reason} / mode={mode}")
 
     # 執筆ガイドは combination に応じて当日採用する4型だけ展開
     writing_guide = format_writing_guide(guide, combination)
@@ -575,10 +825,8 @@ def main():
     recent_notes_section = format_recent_notes_for_avoidance(recent_note_excerpts)
     print(f"[generate_note] 直近note参照: {len(recent_note_excerpts)}件 (心理学用語重複回避用)")
 
-    # Sheetsのnote投稿DBから過去4週・直近5件のタイトル履歴を取得し、切り口（核概念語）の重複回避に使う
-    past_note_records = load_past_note_titles_from_sheets(weeks=4, limit=5)
+    # 切り口（核概念語）の重複回避＋テーマ重複回避は冒頭で取得済みの past_note_records を再利用
     past_notes_avoid_section = build_past_notes_avoid_section(past_note_records)
-    print(f"[generate_note] Sheets note履歴: {len(past_note_records)}件 (切り口重複回避用)")
 
     # pain_point / 場面 / 現れ方 の3要素は Python 側で事前選択し、DBに記録する
     # past_note_records の selected_situation / selected_manifestation を避けて重複を防ぐ
@@ -592,6 +840,31 @@ def main():
 
     # Claude API で記事生成
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+
+    # ペルソナ・コンセプト・商品から逆算してテーマを Claude に動的提案させる（メイン記事生成の前段）
+    best_post_type_hint = ""
+    if recent_posts:
+        seen_pt: list[str] = []
+        for p in recent_posts:
+            pt = p.get("post_type", "")
+            if pt and pt not in seen_pt:
+                seen_pt.append(pt)
+            if len(seen_pt) >= 3:
+                break
+        best_post_type_hint = " > ".join(_POST_TYPE_LABELS.get(t, t) for t in seen_pt)
+    try:
+        theme_label, theme_desc = propose_dynamic_theme(
+            client, strategy, mode, past_note_records, combination, best_post_type_hint
+        )
+    except ThemeGenerationError as e:
+        print(f"[generate_note] テーマ動的生成に失敗: {e}", flush=True)
+        notify_slack_note_generation_failure(
+            stage="テーマ動的生成（Claude APIまたはJSONパース）",
+            mode=mode,
+            error=str(e),
+        )
+        raise SystemExit(1)
+    print(f"[generate_note] テーマ動的生成: {theme_label}｜{theme_desc}")
 
     if mode == "free":
         prompt = build_free_note_prompt(
@@ -648,7 +921,7 @@ def main():
     # Slack通知（タイトル + GitHub URL のみ、本文は含めない）
     notify_slack_note(title, mode, github_url)
 
-    # Google Sheetsに記録（組み合わせパターン情報＋事前選択した切り口も含む）
+    # Google Sheetsに記録（組み合わせパターン情報＋事前選択した切り口＋動的生成テーマも含む）
     append_note_record({
         "type": mode,
         "title": title,
@@ -666,6 +939,8 @@ def main():
         "selected_pain_point": (angle_combo or {}).get("pain_point", ""),
         "selected_situation": (angle_combo or {}).get("situation", ""),
         "selected_manifestation": (angle_combo or {}).get("manifestation", ""),
+        "theme_label": theme_label,
+        "theme_description": theme_desc,
     })
 
     print("[generate_note] 完了")
