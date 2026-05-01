@@ -18,6 +18,7 @@ POST_TYPE_LABELS = {
     "opinion": "業界考察系",
     "dialogue": "対話系",
     "note_promo": "note誘導系",
+    "gw_note_promo": "GW note拡散系",
 }
 
 
