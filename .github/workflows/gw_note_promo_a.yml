@@ -1,12 +1,12 @@
-name: GW Note Promo A 13:30 JST (2026-05-01〜2026-05-06)
+name: GW Note Promo A 07:00 JST (2026-05-01〜2026-05-06)
 
-# GW期間限定の有料note拡散用Threads投稿（slot 0 / 13:30 JST）。
+# GW期間限定の有料note拡散用Threads投稿（slot 0 / 07:00 JST）。
 # - スクリプト側で配信期間（config/gw_note_promo_prompts.json の campaign_window）を
 #   ガードしているため、cron は毎日起動しても期間外は静かにスキップする。
 # - GW終了後（2026-05-07以降）はこのワークフローを無効化または削除して構わない。
 on:
   schedule:
-    - cron: '30 4 * * *'  # UTC 04:30 = JST 13:30
+    - cron: '0 22 * * *'  # UTC 22:00 (前日) = JST 07:00
   workflow_dispatch:
 
 jobs:
