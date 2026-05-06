@@ -65,26 +65,26 @@ def notify_slack(content: str, post_type: str, title: str = "Threads投稿完了
 
 
 def notify_slack_note(title: str, mode: str, github_url: str) -> None:
-    """note記事ドラフト生成完了をSlackに通知。本文は含めずGitHub URLのみを送信。"""
+    """noteテーマ提案生成完了をSlackに通知。代表タイトル＋GitHub URLのみを送信。"""
     mode_label = "無料note" if mode == "free" else "有料note"
     _post_to_slack([
         {
             "type": "header",
-            "text": {"type": "plain_text", "text": f"📝 note記事ドラフト生成完了（{mode_label}）"},
+            "text": {"type": "plain_text", "text": f"📝 noteテーマ提案生成完了（{mode_label}）"},
         },
         {
             "type": "section",
             "text": {"type": "mrkdwn", "text": f"*{title}*"},
             "accessory": {
                 "type": "button",
-                "text": {"type": "plain_text", "text": "記事を開く"},
+                "text": {"type": "plain_text", "text": "提案を開く"},
                 "url": github_url,
             },
         },
         {
             "type": "context",
             "elements": [
-                {"type": "mrkdwn", "text": "✏️ 確認・微修正後、note.comに手動で投稿してください"}
+                {"type": "mrkdwn", "text": "🧠 3つのテーマ案から1つ選び、note.com 用の本文を別途作成してください"}
             ],
         },
     ])
