@@ -90,7 +90,7 @@ gspread は数値IDを科学表記に暗黙変換するため、`sheets._normali
 - 同時に **note投稿DB に 3 行を `status='proposed'` で append**（同じ `generated_at` / `file_path` で 3 行・各 `title` は `title_candidate`、`theme_label` / `theme_description`(=reason) を埋める。`combination_pattern` / `*_type` / `ref_threads_post_ids` / `selling_element_ids` / `selected_*` 列は空欄）。運用者は 1 つを選んで note.com 用本文を別途作成し、投稿後に `url` / `status='posted'` を手動更新する。
 - `analyze_note_performance.py` は同様に `output/reports/YYYY-MM-DD_note_analysis.md` をコミット。
 - Slack 通知（`notify_slack_note`）は代表タイトル（先頭テーマ）+ GitHub blob URL のみで、本文・他2案は載せない（トークン節約＋詳細は GitHub view で確認）。
-- 本文生成・組み合わせパターン選択・writing_guide 注入・selling_elements・angle_combo は **このスクリプトからは廃止済み**。`config/note_writing_guide.json` は将来本文生成を再開する可能性のため残置されているが、現行 `generate_note.py` からは参照されない。
+- 本文生成・組み合わせパターン選択・writing_guide 注入・selling_elements・angle_combo は **このスクリプトからは廃止済み**。`config/note_writing_guide.json` は現行 `generate_note.py` からは参照されないが、**運用者または Claude がこのリポジトリ内で note 記事本文を作成・編集するとき（提案された 3 テーマから 1 つ選んで note.com 用本文を書く工程）は必ずこのファイルを参照すること**（タイトル型 / 冒頭フック型 / 課題提示型 / 解決法型 / 高エンゲージメント実証パターン / Threads→note 引き継ぎ設計 / 有料note の売れる要素チェックリストが集約されている）。将来的に本文生成を再開する可能性も考えてファイル自体は残置している。
 
 ### note誘導Threads配信（3日に1回 20:00 JST）
 `scripts/post_note_promo.py` は当日の `output/notes/YYYY-MM-DD_free.md` を読み、note記事を読みたくさせる「フック本文＋補足リプライ1＋URL単独リプライ2」の3投稿構成スレッドを配信する。
