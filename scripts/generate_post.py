@@ -54,6 +54,9 @@ def build_prompt(strategy: dict, post_type: str, recent_posts: list[dict] | None
     positioning = strategy["positioning"]
     post_info = strategy["post_types"][post_type]
     persona = strategy["persona"]
+    funnel = strategy["funnel"]
+    midend = positioning["midend_product"]
+    backend = positioning["backend_product"]
 
     # slot 1（11:45 JST）は1日1回のフック形式スロット
     slot = int(os.environ.get("POST_SLOT", "0"))
@@ -152,12 +155,19 @@ def build_prompt(strategy: dict, post_type: str, recent_posts: list[dict] | None
     return f"""あなたはSNSコンテンツライターです。
 以下の戦略に基づいて、日本語のThreads投稿文と補足セルフリプライを生成してください。
 
-【ポジショニング】
-- ポジション：{positioning["position"]}
-- コンセプト：{positioning["concept"]}
-- 差別化軸：{positioning["differentiation"]}
-- 想起ワード：{positioning["tagline"]}
-- ステートメント：{positioning["statement"]}
+【発信者】
+- 立ち位置：{positioning["speaker"]}
+- credibility（一次経験ソース）：
+{chr(10).join(f"  - {c}" for c in positioning["credibility"])}
+- 差別化メソッド：{positioning["differentiation"]}
+
+【読者の到達点（ToBe）】{positioning["tobe"]}
+【ToBeを阻む構造】{positioning["tobe_barrier"]}
+
+【商品ラダー＋ファネル】
+- ミドルエンド：{midend["title"]}（¥{midend["price_min"]}〜{midend["price_max"]}）／{funnel["midend_role"]}
+- バックエンド：{backend["title"]}（¥{backend["price"]}）／{funnel["backend_path"]}
+- SNS担当範囲：{funnel["sns_role"]}
 
 【ターゲット】
 {persona["description"]}
@@ -165,6 +175,7 @@ def build_prompt(strategy: dict, post_type: str, recent_posts: list[dict] | None
 
 【今回の投稿タイプ】
 {post_info["label"]}（{post_info["description"]}）
+ファネル段階：{post_info["funnel_stage"]}
 {type_specific_rules}
 【共通ルール】
 - ルート（本文）：1行・20〜40字に圧縮し、意外性のある問題提起または常識を覆す一言に絞る。読者の手を止めて続きを読ませるフックに徹する（競合分析より、ルート短文＋リプライ1詳細展開の2投稿構成が最高ERを記録）
