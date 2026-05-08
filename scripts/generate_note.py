@@ -85,6 +85,7 @@ def propose_three_themes(
     persona = strategy["persona"]
     backend = positioning.get("backend_product", {})
     midend = positioning.get("midend_product", {})
+    funnel = strategy.get("funnel", {})
     past_themes_text = build_past_themes_avoid_section(past_records)
 
     if mode == "free":
@@ -94,20 +95,24 @@ def propose_three_themes(
         )
     else:
         mode_directive = (
-            f"有料記事（¥{midend.get('price', 1980)} / ミドルエンド商品『"
-            f"{midend.get('title', '')}』）のテーマ提案。バックエンド商品『"
-            f"{backend.get('title', '')}』への入り口として機能し、"
+            f"有料記事（ミドルエンド商品『{midend.get('title', '')}』、"
+            f"¥{midend.get('price_min', 500)}〜{midend.get('price_max', 4980)}）のテーマ提案。"
+            f"バックエンド商品『{backend.get('title', '')}』への入り口として機能し、"
             "「これは買う価値がある」と感じさせる具体性・独自性のある切り口を選ぶ。"
         )
 
     prompt = f"""あなたは note 記事の編集者です。以下の発信者情報・ペルソナから逆算し、本日生成する note 記事のテーマを 3 つ提案してください。各テーマは「ペルソナの爬虫類脳または哺乳類脳に直撃する」観点で設計し、なぜそのテーマを推すかを根拠つきで述べてください。
 
-【ポジショニング】{positioning["position"]}
-【コンセプト】{positioning["concept"]}
-【差別化】{positioning["differentiation"]}
-【バックエンド商品】{backend.get("title", "")}：{backend.get("description", "")}
-【ミドルエンド商品】{midend.get("title", "")}（¥{midend.get("price", 1980)}）：{midend.get("description", "")}
-【ステートメント】{positioning["statement"]}
+【立ち位置】{positioning["speaker"]}
+【credibility（発信者の一次経験ソース）】
+{chr(10).join(f"- {c}" for c in positioning["credibility"])}
+【ToBe（読者の到達点）】{positioning["tobe"]}
+【ToBeを阻む構造】{positioning["tobe_barrier"]}
+【差別化メソッド】{positioning["differentiation"]}
+【ミドルエンド商品】{midend.get("title", "")}（¥{midend.get("price_min", 500)}〜{midend.get("price_max", 4980)}）
+ミドルエンドの役割：{funnel.get("midend_role", "")}
+【バックエンド商品】{backend.get("title", "")}（¥{backend.get("price", 550000)}）
+バックエンドへの導線：{funnel.get("backend_path", "")}
 
 【ターゲット】{persona["description"]}
 ペルソナの悩み:
@@ -120,16 +125,16 @@ def propose_three_themes(
 - 爬虫類脳（reptilian）: 生存本能・損失回避・地位・縄張り・身体反応・即時性。
   刺さる要素 = 「このままだと失う／削られる」「危険・不可逆」「数値で迫る損失」「身体が壊れる」「奪われる縄張り」
 - 哺乳類脳（mammalian）: 所属・愛着・承認・安心・社会的比較・関係性。
-  刺さる要素 = 「家族との繋がり」「仲間の評価」「孤立への怖さ」「肯定されたい」「比較で生まれる焦り」
+  刺さる要素 = 「親密な人との繋がり」「仲間の評価」「孤立への怖さ」「肯定されたい」「比較で生まれる焦り」
 
 【過去noteで扱ったテーマ（重複させない）】
 {past_themes_text}
 
 【提案ルール】
-- ペルソナの pain_point を中心に据え、商品の世界観（仕事の成果をそのままに、家族時間を取り戻す／設計で解決する）に整合させる
+- ペルソナの pain_point を中心に据え、上記 ToBe・ToBeを阻む構造・差別化メソッドに整合させる
 - 3 テーマで target_brain が偏らないようにする（爬虫類脳寄り 2 + 哺乳類脳寄り 1、もしくは "both" を 1 つ含める等、刺激ルートを分散）
 - 上記「過去noteで扱ったテーマ」と意味的に被らない（同じ単語の言い換えだけの近接テーマは避ける）
-- 抽象的な大テーマ（例: 「働き方について」）ではなく、記事 1 本で扱える具体的な切り口にする
+- 抽象的な大テーマ（例: 「人間関係について」「結婚について」）ではなく、記事 1 本で扱える具体的な切り口にする
 - title_candidate は 18〜30 字、theme_label は 8〜18 字
 - reason は 200 字以内（厳守・超過禁止）。「このテーマがなぜ今のペルソナに刺さるか／なぜ他の切り口より優先したいか」を 1〜2 文で書く
 
