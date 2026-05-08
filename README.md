@@ -116,11 +116,13 @@ cd sns-automation
 
 ```json
 {
-  "position": "ハイパフォーマーのための、コンディション設計の専門家",
-  "concept": "スマートに勝ち続ける設計力",
-  "differentiation": "意思力に頼らないパフォーマンス設計"
+  "speaker": "独身ITエンジニア・PM男性が、ありのままの自分で愛し愛される生涯の関係を築くための、マインド設計者",
+  "tobe": "ありのままの自分でいながら愛し愛される関係を、生涯のパートナーと共に深め続けている",
+  "differentiation": "テクニックやノウハウに頼らず、自分が苦しくなる内側のパターンを言語化して書き換える、再現性のあるマインド設計型メソッド"
 }
 ```
+
+> 上記は positioning フィールドの主要部の抜粋。実際の `strategy.json` は `positioning` / `funnel` / `persona` / `post_types` / `post_rotation` の5トップレベル構造を持つ。詳細は `CLAUDE.md` の「ポジショニング・ペルソナは strategy.json に集約」セクションを参照。
 
 ---
 
