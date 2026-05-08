@@ -92,8 +92,8 @@ def analyze_with_claude(posts: list[dict], strategy: dict) -> str:
 スレッド投稿は一連の文章として読み、構成パターンも分析対象に含めてください。
 
 【自社ポジション】
-- ポジション：{positioning.get("position", "")}
-- コンセプト：{positioning.get("concept", "")}
+- 立ち位置：{positioning.get("speaker", "")}
+- ToBe（読者の到達点）：{positioning.get("tobe", "")}
 - 差別化軸：{positioning.get("differentiation", "")}
 
 【競合の投稿】
