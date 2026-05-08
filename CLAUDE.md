@@ -59,9 +59,10 @@ index = ((day_of_year - 1) * 5 + POST_SLOT) % len(rotation)
 
 ### ポジショニング・ペルソナは strategy.json に集約
 投稿生成／競合分析／週次レポート／note 生成の4スクリプトすべてが `config/strategy.json` を読む。変更するときは下流全部に影響する前提で編集する:
-- `positioning`: position / concept / differentiation / tagline / statement / `backend_product` (title/description) / `midend_product` (title/description/price)。商品体系は **バックエンド = 戦略設計講座（家族も仕事も諦めない両立）／ミドルエンド = 戦略設計記事（有料note ¥1,980）** で構成され、`generate_note.py` の3テーマ提案プロンプトに「導線として機能する切り口を選ぶ」根拠として渡される。
+- `positioning`: speaker / credibility（配列・3項目） / tobe / tobe_barrier / differentiation / `midend_product` (title/price_min/price_max) / `backend_product` (title/price)。商品体系は **バックエンド = 愛を深め続けるマインド構築講座（¥550,000）／ミドルエンド = 理想の相手の見つけ方ガイド（有料noteシリーズ ¥500〜4,980）** で構成され、`generate_note.py` の3テーマ提案プロンプトに「導線として機能する切り口を選ぶ」根拠として渡される。商品の `description` フィールドは持たず、ファネル上の役割は `funnel.midend_role` / `funnel.backend_path` に集約。
+- `funnel`: 消費者心理5段階（認知→共感→興味→理解→納得）の `stages` 配列＋ `stage_intents`（動詞化 intent のマップ）、`sns_role` / `midend_role` / `backend_path` で SNS／midend／backend の役割を1〜2行で明示。`post_types.*.funnel_stage` から `stage_intents` の動詞を間接参照する設計。SNS（Threads／無料note）は認知/共感/興味段階を担当し、最大KPIは公式LINE登録。バックエンドは SNS から直接誘導しない（理解→納得→クロージングの3段階を経由）。
 - `persona`: description / pain_points（プロンプトに注入される）
-- `post_types`: 各タイプの label / description / ratio
+- `post_types`: 各タイプの label / description / ratio / funnel_stage（動詞形：「認知を獲得する」「共感を引き出す」等）
 - `post_rotation`: 実際の出現順序（`ratio` は表示用で、実運用は rotation のカウント比で決まる）
 
 発信者の事実情報（結婚・子どもの有無・キャリア年数など）と、そこから派生する自己開示スタンスは `docs/author_profile.md` に切り出してある。実行時には参照されず、`generate_post.py` / `generate_note.py` の共通ルールにハードコードされた制約の**根拠ドキュメント**として扱う。
