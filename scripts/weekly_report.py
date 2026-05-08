@@ -109,8 +109,8 @@ def generate_report(strategy: dict, own_summary: str, competitor_summary: str, p
 以下のデータを分析し、日本語で改善提案を出してください。
 
 【ポジショニング】
-- ポジション：{positioning["position"]}
-- コンセプト：{positioning["concept"]}
+- 立ち位置：{positioning["speaker"]}
+- ToBe（読者の到達点）：{positioning["tobe"]}
 - 差別化軸：{positioning["differentiation"]}
 
 【現在の投稿タイプ配分】
