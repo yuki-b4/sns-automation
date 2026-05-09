@@ -19,6 +19,23 @@
 | バックエンド | 愛を深め続けるマインド構築講座 ¥550,000 |
 | 個別相談 | 45分・無料（通常 ¥50,000/h相当 ＝ 45分換算 ¥37,500相当の希少性） |
 
+### 運用コスト
+
+本ファネルの稼働に必要な月額費用。
+
+| 項目 | プラン | 月額 | 必要性 |
+|---|---|---|---|
+| LINE 公式アカウント | ライトプラン | ¥5,000 | **必須**（無料プランは月200通配信のみ／7日配信×登録者100人で最低700通必要） |
+| Zoom | Pro | 約¥2,000 | **必須**（90分セミナー実施・無料プランは40分制限） |
+| Bitly | Free | ¥0 | 月25,000クリック以内なら無料／詳細履歴が必要なら Core $8/月 |
+| Googleフォーム／Googleカレンダー | — | ¥0 | — |
+| カレンダー予約ツール（TimeRex／Spir／Calendly等） | 無料プラン | ¥0 | 運用初期は無料で十分 |
+| 決済プラットフォーム（Stripe等） | — | 決済額の3〜4% | バックエンド契約決済 |
+
+**固定費合計**: 約 **¥7,000/月**（LINE ライト ¥5,000 ＋ Zoom Pro ¥2,000）／別途決済手数料
+
+立ち上げ時の契約タスクは §6 を参照。
+
 ### テーマ表現の3バリエーション
 
 用途別に3つの長さを使い分ける:
@@ -122,7 +139,7 @@ SNS（Threads／無料note）
 
 **開催頻度**: 月1〜2回。LINE登録から最大3週間以内に出席可能とする（リードタイム1ヶ月維持のため）。
 
-**形式**: Zoom等のオンライン双方向。録画案内はしない（出席のインセンティブを保つ）。
+**形式**: Zoom 等のオンライン双方向（90分セミナーのため Zoom Pro 必須・詳細は §1 運用コスト参照）。録画案内はしない（出席のインセンティブを保つ）。
 
 **章立て案**:
 
@@ -178,10 +195,10 @@ SNS（Threads／無料note）
 
 ```
 【層1：SNS到達層】
-   インプレッション → 到達者 → プロフィール訪問 → リンククリック
+   月間 views 合計 → 月間 Bitly クリック数
                   ↓
 【層2：ファネル入口層】← CVR目標 30%
-   リンククリック → LINE登録
+   Bitly クリック → LINE登録
                   ↓
 【層3：ナーチャリング層】← CVR目標 50%
    LINE登録 → セミナー予約 → セミナー出席
@@ -194,33 +211,33 @@ SNS（Threads／無料note）
 
 | 層 | 指標 | 分母（比較元） | 分子 | 目標 | 計測ソース |
 |---|---|---|---|---|---|
-| 1-a | インプレッション→到達者比 | 月間インプレッション | 月間ユニーク到達者 | 参考値 | Threads Insights |
-| 1-b | 到達者→プロフィール訪問率 | 月間ユニーク到達者 | 月間プロフィール訪問 | 参考値（5〜10%） | Threads Insights |
-| 1-c | プロフィール訪問→リンククリック率 | 月間プロフィール訪問 | 月間リンククリック | 10〜15% | Threads Insights |
-| **2** | **リンククリック→LINE登録率** | **月間リンククリック** | **月間LINE登録** | **30%** | LINE公式アカウント管理画面＋短縮URL |
-| **3-a** | **LINE登録→セミナー予約率** | **コホート別LINE登録数** | **コホート別セミナー予約数** | **50%** | LINE側フォーム or Googleフォーム |
-| 3-b | セミナー予約→出席率 | セミナー予約数 | 実出席数 | 70〜80%（業界相場） | Zoom等セミナーツール |
-| **4-a** | **セミナー出席→個別相談申込率** | **セミナー出席者数** | **個別相談申込数** | **50%** | セミナー後フォーム |
-| 4-b | 個別相談申込→実施率 | 個別相談申込数 | 個別相談実施数 | 80〜90%（業界相場） | カレンダー予約管理 |
-| **4-c** | **個別相談実施→成約率** | **個別相談実施数** | **バックエンド成約数** | **50%** | 手動記録 |
+| 1 | views→Bitlyクリック率 | 月間 views 合計 | 月間 Bitly クリック | 参考値 | Threads Insights API（views を `collect_metrics.py` で取得・post-level 合算）＋ Bitly 管理画面（手動転記） |
+| **2** | **Bitlyクリック→LINE登録率** | **月間 Bitly クリック** | **月間 LINE登録** | **30%** | LINE Official Account Manager（**ライト ¥5,000/月**）＋ Bitly 管理画面 |
+| **3-a** | **LINE登録→セミナー予約率** | **コホート別LINE登録数** | **コホート別セミナー予約数** | **50%** | Googleフォーム |
+| 3-b | セミナー予約→出席率 | セミナー予約数 | 実出席数 | 70〜80%（業界相場） | **Zoom Pro（約¥2,000/月）** の参加者ログ |
+| **4-a** | **セミナー出席→個別相談申込率** | **セミナー出席者数** | **個別相談申込数** | **50%** | セミナー後フォーム（Googleフォーム） |
+| 4-b | 個別相談申込→実施率 | 個別相談申込数 | 個別相談実施数 | 80〜90%（業界相場） | カレンダー予約管理（TimeRex／Spir／Googleカレンダー等） |
+| **4-c** | **個別相談実施→成約率** | **個別相談実施数** | **バックエンド成約数** | **50%** | 手動記録（決済プラットフォーム連携可） |
 
 **太字** が運用者提示の主要4目標値（30 / 50 / 50 / 50）。それ以外は補助KPI。
+
+**層1 の制約事項**: Threads Insights API では unique reach / profile_views / link_clicks のいずれもアカウントレベルで取得できない。そのため初稿の層1（インプレッション→到達者→プロフィール訪問→リンククリックの4段階）を「views 合計→Bitly クリック」の2指標に簡略化した。詳細は §5.2 参照。
 
 ### 3.3 補助KPI
 
 | 補助指標 | 計算 | 目的 |
 |---|---|---|
-| 総合CVR（リンククリック→成約） | 30% × 50% × 50% × 50% = 3.75% | ファネル全体効率の単一スコア |
-| 必要トラフィック（月1件成約） | 月8件LINE登録 ／ 月27件リンククリック | SNS集客の月次ノルマ算出 |
-| 必要トラフィック（月3件成約） | 月24件LINE登録 ／ 月80件リンククリック | スケール時の集客ノルマ |
-| 平均LTV／顧客 | バックエンド ¥550,000 ＋ ミドルエンド購入額（任意） | 1成約あたりの売上換算 |
+| 総合CVR（Bitlyクリック→成約） | 30% × 50% × 50% × 50% = 3.75% | ファネル全体効率の単一スコア |
+| 必要トラフィック（月1件成約） | 月8件 LINE登録 ／ 月27件 Bitly クリック | SNS集客の月次ノルマ算出 |
+| 必要トラフィック（月3件成約） | 月24件 LINE登録 ／ 月80件 Bitly クリック | スケール時の集客ノルマ |
+| 平均LTV／顧客 | バックエンド ¥550,000 | 1成約あたりの売上換算（ミドルエンド購入は note.com 匿名購入と LINE登録者の紐付けが原理的に困難なため、本ファネルKPIには含めない） |
 | コホート別追跡 | LINE登録月別に層3〜4を集計 | ナーチャリング配信改善の効果検証 |
 
 ### 3.4 設計ポリシー
 
 1. **層を独立に評価する**：層1が悪化したら投稿コンテンツ／プロフィールを改善対象に、層2が悪化したらLINE登録ページの誘導文／登録特典を改善対象にする。層を混ぜると改善対象が特定できない。
 2. **層3〜4はコホート（LINE登録月）で集計する**：単純月次比だと先月登録者が今月セミナーに来る現象でCVRが歪む。1ヶ月リードタイムなので、登録月+1ヶ月で層3〜4のCVRが確定する。
-3. **層1と層2の境目（リンククリック）の計測精度を最優先する**：ファネル全体の最大ボトルネックは、ほぼ確実にこの境目。Threads Insights のリンククリック数は粒度が粗いため、Bitly等の短縮URLで独立計測する。
+3. **層1と層2の境目（Bitlyクリック）の計測精度を最優先する**：ファネル全体の最大ボトルネックは、ほぼ確実にこの境目。Threads Insights API ではプロフィール内のリンククリック数自体が取得できないため、Bitly等の短縮URLで独立計測する以外の選択肢がない。流入元別（Threads用／note用 等）に短縮URLを別個発行することで、流入元別のクリック数も判別可能になる。
 
 ---
 
@@ -245,8 +262,7 @@ Google Sheets を `config/strategy.json` 周辺と同じ DBレイヤーで運用
 | `registered_at` | datetime (YYYY-MM-DD HH:MM) | LINE登録日時 |
 | `cohort_month` | text (YYYY-MM) | 登録月（コホート集計の主キー） |
 | `handle_or_alias` | text | LINE上の表示名／本人合意のうえで記録 |
-| `registration_source` | text | 流入元（threads / note / other） |
-| `source_post_id` | text | 流入元投稿ID（特定できる場合のみ） |
+| `registration_source` | text | 流入元（threads / note / other）。**判別には流入元別の短縮URLを別個に発行する必要がある**（例: `bit.ly/xxx-threads` を Threadsプロフィールに掲示、`bit.ly/xxx-note` を noteプロフィールに掲示）。同一登録者が複数経由した場合は最終クリックの URL を採用 |
 | `seminar_session_id` | text | 出席（予約）したセミナー回（YYYY-MM-DD形式の開催日） |
 | `seminar_reserved_at` | datetime | セミナー予約日時 |
 | `seminar_attended` | bool (TRUE/FALSE) | 実出席したか |
@@ -255,10 +271,12 @@ Google Sheets を `config/strategy.json` 周辺と同じ DBレイヤーで運用
 | `consultation_status` | text | planned / done / no_show / canceled |
 | `contract_at` | date | バックエンド契約日 |
 | `contract_amount` | int | 契約金額（¥） |
-| `midend_purchase_at` | date | ミドルエンド購入日（任意） |
-| `midend_amount` | int | ミドルエンド購入金額（¥） |
 | `status` | text | registered / nurturing / seminar_attended / consultation_done / contracted / lost / cooling |
 | `notes` | text | 自由記述 |
+
+**初稿から削除した列**:
+- `source_post_id`：投稿ごとに別の短縮URLを発行するのは非現実的（Threadsだけで月150投稿超）。投稿単位の流入分析は本ファネルでは行わない
+- `midend_purchase_at` ／ `midend_amount`：note.com の匿名購入と LINE 登録者を紐付けるのが原理的に困難。ミドルエンド購入は本ファネルKPIの追跡対象から外す
 
 **運用ルール**:
 - 個人を識別するLINEユーザーIDは記録しない（プライバシー配慮）。`handle_or_alias` でユニーク識別する
@@ -272,17 +290,17 @@ Google Sheets を `config/strategy.json` 周辺と同じ DBレイヤーで運用
 | 列名 | 型 | 算出元 |
 |---|---|---|
 | `year_month` | text (YYYY-MM) | — |
-| `impressions` | int | Threads Insights（`collect_metrics.py` 拡張） |
-| `reach_unique` | int | Threads Insights |
-| `profile_visits` | int | Threads Insights |
-| `link_clicks` | int | 短縮URL管理画面 or Threads Insights |
+| `views_total` | int | Threads Insights API の post-level views を当月分合算（`collect_metrics.py` 拡張） |
+| `bitly_clicks_total` | int | Bitly 管理画面から当月クリック数を手動転記（流入元別の合計） |
+| `bitly_clicks_threads` | int | Threads用短縮URLのクリック数（任意・流入元別分析用） |
+| `bitly_clicks_note` | int | note用短縮URLのクリック数（任意・流入元別分析用） |
 | `line_registrations` | int | `ファネル登録ログ` の `registered_at` が当月の行数 |
 | `seminar_sessions_count` | int | 当月開催したセミナー回数 |
 | `seminar_attendances_total` | int | `seminar_attended=TRUE` かつ `seminar_session_id` が当月の行数 |
 | `consultation_implementations_total` | int | `consultation_implemented_at` が当月の行数 |
 | `contracts_total` | int | `contract_at` が当月の行数 |
-| `revenue_total` | int | `contract_at` が当月の行の `contract_amount` 合計 |
-| `cvr_click_to_register` | float (0-1) | `line_registrations / link_clicks` |
+| `revenue_total` | int | `contract_at` が当月の行の `contract_amount` 合計（バックエンドのみ） |
+| `cvr_click_to_register` | float (0-1) | `line_registrations / bitly_clicks_total` |
 | `target_contracts` | int | 当月成約目標数（事前設定） |
 | `gap` | int | `contracts_total - target_contracts` |
 | `notes` | text | 月次振り返りメモ |
@@ -313,18 +331,20 @@ Google Sheets を `config/strategy.json` 周辺と同じ DBレイヤーで運用
 
 | 項目 | 集計方法 | 工数 |
 |---|---|---|
-| 層1 SNS指標（impressions / reach / profile_visits / link_clicks） | `scripts/collect_metrics.py` を拡張してアカウントレベルInsightsを取得 → `ファネルKPI月次` に書き込み | 開発：中（数時間） |
-| 層2 LINE登録 | LINE管理画面から登録通知を運用者が `ファネル登録ログ` に手動転記 | 運用：1件あたり30秒 |
-| 層3 セミナー予約／出席 | Googleフォーム → スプレッドシート連携で自動取り込み（運用者が登録ログに転記） | 運用：1件あたり30秒 |
-| 層4 個別相談／成約 | カレンダー＋手動記録 → 登録ログに転記 | 運用：1件あたり1〜2分 |
+| 層1 views_total | `scripts/collect_metrics.py` を拡張し post-level views を月次合算 → `ファネルKPI月次` に書き込み | 開発：中（数時間） |
+| 層1 bitly_clicks_total（および流入元別） | Bitly 管理画面から月次クリック数を運用者が `ファネルKPI月次` に手動転記 | 運用：月1回・5分 |
+| 層2 LINE登録 | LINE Official Account Manager（ライト）から登録履歴を運用者が `ファネル登録ログ` に手動転記 | 運用：1件あたり30秒 |
+| 層3 セミナー予約／出席 | Googleフォーム → スプレッドシート連携で自動取り込み／Zoom Pro 参加者ログから出席判定（運用者が登録ログに転記） | 運用：1件あたり30秒 |
+| 層4 個別相談／成約 | カレンダー予約＋手動記録 → 登録ログに転記 | 運用：1件あたり1〜2分 |
 | `ファネルKPI月次` の算出列 | スプレッドシート関数（COUNTIFS / SUMIFS）で登録ログから自動集計 | 設計時のみ |
 | `ファネルKPIコホート` の算出列 | スプレッドシート関数で登録ログから自動集計 | 設計時のみ |
 
 **月次運用フロー**:
-1. 月初：前月分の層1指標（Threads Insights）を `collect_metrics.py` で取得し `ファネルKPI月次` に書き込み
-2. 月初：前月のLINE登録／セミナー／相談／成約イベントを運用者が登録ログに転記（リアルタイム転記が望ましいが、最低でも月次で確定）
-3. 月初：`ファネルKPI月次` の算出列を確認（運用ダッシュボード）
-4. 前々月コホートの60日成績が確定したら `ファネルKPIコホート` を確認（CVR検証）
+1. 月初：前月分の views_total（Threads Insights）を `collect_metrics.py` で取得し `ファネルKPI月次` に書き込み
+2. 月初：前月分の bitly_clicks_total を Bitly 管理画面から手動転記
+3. 月初：前月のLINE登録／セミナー／相談／成約イベントを運用者が登録ログに転記（リアルタイム転記が望ましいが、最低でも月次で確定）
+4. 月初：`ファネルKPI月次` の算出列を確認（運用ダッシュボード）
+5. 前々月コホートの60日成績が確定したら `ファネルKPIコホート` を確認（CVR検証）
 
 ---
 
@@ -334,16 +354,21 @@ Google Sheets を `config/strategy.json` 周辺と同じ DBレイヤーで運用
 
 投稿単位のインプレッション／いいね／返信／リポストを `メトリクスDB` に記録する仕組みは整備済み。
 
-### 5.2 必要追加：アカウントレベルInsights取得
+### 5.2 必要追加：月間 views 合計の取得
 
-| 項目 | 取得対象 | API |
-|---|---|---|
-| 月間インプレッション | アカウント全体の総impressions | Threads Insights API（account-level metric） |
-| 月間ユニーク到達者 | reach unique | Threads Insights API |
-| 月間プロフィール訪問 | profile_views | Threads Insights API |
-| 月間リンククリック | プロフィール内リンククリック数 | Threads Insights API（または短縮URL管理画面） |
+Threads Insights API では unique reach / profile_views / link_clicks のいずれもアカウントレベルで取得できない（投稿レベルでも unique reach は不可）。そのため層1指標は **アカウント月間 views 合計**（post-level views の合算）と **Bitly クリック数** の2つに簡略化している（§3.1 §3.2 参照）。
 
-`collect_metrics.py` に `collect_account_metrics(year_month)` 関数を追加し、月初cronで前月分を `ファネルKPI月次` に upsert する設計を想定。
+| 項目 | 取得対象 | ソース | 自動化 |
+|---|---|---|---|
+| 月間 views 合計 | post-level views（impressions相当）の月次合算 | Threads Insights API（既存 `collect_threads_metrics` の views をアカウント単位で合算） | ◎ `collect_metrics.py` 拡張で自動化可能 |
+| 月間 Bitly クリック | 流入元別の各短縮URLのクリック数および合計 | Bitly 管理画面 | ✗ 手動転記（Bitly Free に API は限定的・運用初期は手動で十分） |
+
+`collect_metrics.py` に `collect_account_views(year_month)` 関数を追加し、月初 cron で前月の post-level views を集計して `ファネルKPI月次` の `views_total` に upsert する設計を想定。
+
+**取得不可と判断した指標**（参考記録）:
+- unique reach（アカウント／投稿レベルともに Threads API 非対応）
+- profile_views（Threads API 非対応・Instagram にはあり）
+- link_clicks（Threads API 非対応・Bitly で代替）
 
 ### 5.3 必要追加：シート3つの新規作成
 
@@ -356,12 +381,15 @@ Google Sheets を `config/strategy.json` 周辺と同じ DBレイヤーで運用
 
 ### 5.4 短縮URLでクリック計測
 
-Threads Insights の「リンククリック」はプロフィールリンク全体での集計で粒度が粗い。**Bitly等の短縮URL** を使って独立にクリック数を計測することで、層1-c（プロフィール訪問→リンククリック率）と層2（リンククリック→LINE登録率）の精度が大幅に上がる。
+Threads Insights API ではプロフィール内リンクのクリック数自体が取得できないため、**Bitly等の短縮URL** で独立計測する以外の方法がない。本ファネルでは Bitly Free（月25,000クリック以内・無料）を採用する想定。
 
 本ファネル開始時のセットアップ:
-- LINE登録URL（例：`https://lin.ee/xxxxx`）を短縮URL（例：`https://bit.ly/yyyy`）でラップ
-- ThreadsプロフィールおよびnoteプロフィールにはBitlyリンクを掲示
-- 月初にBitly管理画面から月間クリック数を取得し `ファネルKPI月次` に記録
+- LINE登録URL（例：`https://lin.ee/xxxxx`）を**流入元別に複数の短縮URL**でラップする
+  - Threads用: `https://bit.ly/xxx-threads`（Threadsプロフィール掲示）
+  - note用: `https://bit.ly/xxx-note`（noteプロフィール掲示）
+  - 必要に応じて X / その他媒体用も追加
+- 月初に Bitly 管理画面から各短縮URLの月間クリック数を取得し、`ファネルKPI月次` の `bitly_clicks_threads` / `bitly_clicks_note` / `bitly_clicks_total`（合計）に記録
+- 流入元判別はこの分割発行のみで成立する。`ファネル登録ログ` の `registration_source` 列の値もこの分割を前提とする
 
 ---
 
@@ -369,19 +397,23 @@ Threads Insights の「リンククリック」はプロフィールリンク全
 
 | # | タスク | 担当 | 想定工数 |
 |---|---|---|---|
-| 1 | 公式LINE作成・基本設定 | 運用者 | 1時間 |
-| 2 | 登録特典PDF「結婚の窮屈感の理由特定ワーク」作成 | 運用者＋Claude支援 | 4〜8時間 |
-| 3 | 7日間ステップ配信の本文作成 | 運用者＋Claude支援 | 4〜8時間 |
-| 4 | 短縮URLセットアップ（Bitly等） | 運用者 | 30分 |
-| 5 | Threads／noteプロフィールに登録URL掲示 | 運用者 | 10分 |
-| 6 | 無料webセミナーのスライド作成 | 運用者＋Claude支援 | 8〜12時間 |
-| 7 | セミナー予約フォーム（Googleフォーム）作成 | 運用者 | 30分 |
-| 8 | 個別相談予約フォーム＋カレンダー連携 | 運用者 | 1時間 |
-| 9 | `ファネル登録ログ` ／ `ファネルKPI月次` ／ `ファネルKPIコホート` シート作成（スキーマ通り） | 運用者 | 1時間 |
-| 10 | `collect_metrics.py` 拡張（層1アカウント指標取得） | 開発（後回し可） | 数時間 |
-| 11 | 個別相談スクリプト作成 | 運用者＋Claude支援 | 2〜4時間 |
+| 1 | 公式LINE作成・**ライトプラン契約（¥5,000/月）**・基本設定 | 運用者 | 1〜2時間 |
+| 2 | **Zoom Pro 契約（約¥2,000/月）** | 運用者 | 30分 |
+| 3 | **決済プラットフォーム契約（Stripe等・バックエンド契約決済用）** | 運用者 | 1時間 |
+| 4 | 登録特典PDF「結婚の窮屈感の理由特定ワーク」作成 | 運用者＋Claude支援 | 4〜8時間 |
+| 5 | 7日間ステップ配信の本文作成 | 運用者＋Claude支援 | 4〜8時間 |
+| 6 | 短縮URLセットアップ（Bitly Free・**流入元別に Threads用／note用 等 2本以上発行**） | 運用者 | 30分 |
+| 7 | Threads／noteプロフィールに登録URL掲示（流入元ごとに対応する短縮URL） | 運用者 | 10分 |
+| 8 | 無料webセミナーのスライド作成 | 運用者＋Claude支援 | 8〜12時間 |
+| 9 | セミナー予約フォーム（Googleフォーム）作成 | 運用者 | 30分 |
+| 10 | 個別相談予約フォーム＋カレンダー連携 | 運用者 | 1時間 |
+| 11 | `ファネル登録ログ` ／ `ファネルKPI月次` ／ `ファネルKPIコホート` シート作成（スキーマ通り） | 運用者 | 1時間 |
+| 12 | `collect_metrics.py` 拡張（月間 views 合計の取得：post-level views をアカウント単位で合算） | 開発（後回し可） | 数時間 |
+| 13 | 個別相談スクリプト作成 | 運用者＋Claude支援 | 2〜4時間 |
 
-**最初の1ヶ月で必要な最低限**: #1〜#9（#10は手動Bitly確認で代替可）
+**最初の1ヶ月で必要な最低限**: #1〜#11（#12は views 合計を運用者が手動集計することで代替可）
+
+**月額固定費**: 約 ¥7,000（LINE ライト ¥5,000 ＋ Zoom Pro ¥2,000）／詳細は §1 運用コスト参照
 
 ---
 
