@@ -62,18 +62,30 @@ def _find_note_file_by_title(title: str) -> str | None:
 
 
 # 画像から抽出した値（記事タイトル → views / likes / comments）
-# 集計時刻: 2026-04-27 07:41
+# 集計時刻: 2026-05-11 09:43
 NOTE_METRICS = [
-    {"title": "頑張れてしまう人ほど働き方を変えられない理由",         "views": 44, "likes": 11, "comments": 0},
-    {"title": "意志に頼らず月曜日の集中力を覚醒させる3つの回復術",     "views": 31, "likes": 0,  "comments": 0},
-    {"title": "30代エンジニアが金曜午後も頭が冴えるリソース分配設計",  "views": 30, "likes": 2,  "comments": 0},
-    {"title": "定時で帰れない自分が嫌だ",                              "views": 29, "likes": 2,  "comments": 0},
-    {"title": "Slack通知を3つ変えたら集中時間が週5時間増えた話",       "views": 25, "likes": 1,  "comments": 0},
-    {"title": "大事な意思決定を後回しにしてしまった夜",                "views": 23, "likes": 3,  "comments": 0},
-    {"title": "効率的に結果を出す人ほど家族時間とのねじれに苦しむ理由", "views": 17, "likes": 6,  "comments": 0},
-    {"title": "月曜朝の1時間を受動的に使うと家族との時間が減る",       "views": 13, "likes": 0,  "comments": 0},
-    {"title": "「全部大事」に見える時こそ、決める回数を減らしてみる",  "views": 12, "likes": 0,  "comments": 0},
-    {"title": "休日に罪悪感がある人生なんてうんざりだ",                "views": 4,  "likes": 0,  "comments": 0},
+    {"title": "既読スルーをされる人ほど仕事が出来ている",                              "views": 98, "likes": 9,  "comments": 3},
+    {"title": "新しいテレビを買う前に、AIに聞いたこと",                                "views": 62, "likes": 2,  "comments": 0},
+    {"title": "頑張れてしまう人ほど働き方を変えられない理由",                          "views": 60, "likes": 11, "comments": 0},
+    {"title": "なぜ「忙しい」という人ほど忙しいままなのか",                            "views": 54, "likes": 0,  "comments": 0},
+    {"title": "効率的に結果を出す人ほど家族時間とのねじれに苦しむ理由",                "views": 53, "likes": 6,  "comments": 0},
+    {"title": "休日に罪悪感がある人生なんてうんざりだ",                                "views": 51, "likes": 0,  "comments": 0},
+    {"title": "一流の30代ビジネスマンが家族への罪悪感から解放される結果の出し方",       "views": 49, "likes": 4,  "comments": 0},
+    {"title": "真面目に働くビジネスマンほど「まぁいっか」で片付ける",                  "views": 48, "likes": 4,  "comments": 0},
+    {"title": "30代エンジニアが金曜午後も頭が冴えるリソース分配設計",                  "views": 45, "likes": 2,  "comments": 0},
+    {"title": "大事な意思決定を後回しにしてしまった夜",                                "views": 44, "likes": 3,  "comments": 0},
+    {"title": "「全部大事」に見える時こそ、決める回数を減らしてみる",                  "views": 44, "likes": 0,  "comments": 0},
+    {"title": "月曜朝の1時間を受動的に使うと家族との時間が減る",                       "views": 41, "likes": 0,  "comments": 0},
+    {"title": "意志に頼らず月曜日の集中力を覚醒させる3つの回復術",                     "views": 40, "likes": 0,  "comments": 0},
+    {"title": "AIを使って効率化した人ほど仕事が増えている原因の正体",                  "views": 37, "likes": 3,  "comments": 0},
+    {"title": "定時で帰れない自分が嫌だ",                                              "views": 31, "likes": 2,  "comments": 0},
+    {"title": "Slack通知を3つ変えたら集中時間が週5時間増えた話",                       "views": 26, "likes": 1,  "comments": 0},
+    {"title": "ワークライフバランスを求めて転職した人ほど、残業が減らない構造的な理由", "views": 24, "likes": 2,  "comments": 0},
+    {"title": "結婚を意識した途端に冷める男が、知らずに捨てている「時間」という一番の財産", "views": 22, "likes": 3,  "comments": 2},
+    {"title": "上の空で話を聞いてしまうパパの罪悪感の正体は「働き方の設計」にある",     "views": 21, "likes": 2,  "comments": 0},
+    {"title": "子どもの記憶アルバムに、あなたは何枚写っていますか",                    "views": 13, "likes": 3,  "comments": 0},
+    {"title": "【もう、出汁すら出ない】優しいあなたが、誰かに搾り尽くされる前に",       "views": 6,  "likes": 0,  "comments": 0},
+    {"title": "結婚を「一生の賭け」と捉えている自分に気づいた",                        "views": 6,  "likes": 2,  "comments": 0},
 ]
 
 
