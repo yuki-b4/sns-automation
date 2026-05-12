@@ -223,15 +223,38 @@ SNS（Threads／無料note）
 
 **層1 の制約事項**: Threads Insights API では unique reach / profile_views / link_clicks のいずれもアカウントレベルで取得できない。そのため初稿の層1（インプレッション→到達者→プロフィール訪問→リンククリックの4段階）を「views 合計→Bitly クリック」の2指標に簡略化した。詳細は §5.2 参照。
 
+### 3.2.1 元の4CVRと現在の6サブステージ設計の対応（解釈A＝predicate）
+
+運用者が当初指定した4CVR（公式LINE登録率／セミナー参加率／個別相談申込率／成約率 ＝ 30/50/50/50）は、現在の6サブステージ設計に次のように対応する。本ファネルは**解釈A（predicate）**で運用する。
+
+| 元のCVR（指定） | 値 | 現在の設計でのマッピング | 補足 |
+|---|---|---|---|
+| 公式LINE登録率 | 30% | 層2 Bitlyクリック→LINE登録 | 1:1 完全一致 |
+| セミナー参加率 | 50% | 層3-a LINE登録→**予約**率 | "参加" を "予約" として扱う／予約者の約75%（業界相場・層3-b）が実出席 |
+| 個別相談申込率 | 50% | 層4-a セミナー出席→個別相談**申込** | 1:1 完全一致 |
+| 成約率 | 50% | 層4-c 個別相談**実施**→バックエンド成約 | "成約率" を "実施→成約" として扱う／申込者の約85%（業界相場・層4-b）が実施に到達 |
+
+**predicate 解釈の含意**:
+- 「予約→出席」「申込→実施」のドロップアウト（業界相場でそれぞれ約25% / 約15%）は補助KPIとして独立に追跡
+- 各サブステージのCVR悪化を独立に検知できる（例：予約率は維持されているのに出席率だけ落ちている場合、リマインド設計の問題と特定できる）
+- 結果として総合CVR（Bitlyクリック→成約）は予約→出席／申込→実施 のドロップアウトを含めた実数値となる（§3.3 参照）
+
 ### 3.3 補助KPI
 
 | 補助指標 | 計算 | 目的 |
 |---|---|---|
-| 総合CVR（Bitlyクリック→成約） | 30% × 50% × 50% × 50% = 3.75% | ファネル全体効率の単一スコア |
-| 必要トラフィック（月1件成約） | 月8件 LINE登録 ／ 月27件 Bitly クリック | SNS集客の月次ノルマ算出 |
-| 必要トラフィック（月3件成約） | 月24件 LINE登録 ／ 月80件 Bitly クリック | スケール時の集客ノルマ |
+| 総合CVR（Bitlyクリック→成約・predicate） | 30% × 50% × 75% × 50% × 85% × 50% = **2.39%** | ファネル全体効率の単一スコア。業界相場の予約→出席率75%・申込→実施率85%のドロップアウトを含めた実効値 |
+| LINE登録→成約 CVR（predicate） | 50% × 75% × 50% × 85% × 50% = **7.97%** | LINE登録1件あたりの成約期待値 |
+| 必要トラフィック（月1件成約） | 月13件 LINE登録 ／ 月42件 Bitly クリック | SNS集客の月次ノルマ算出 |
+| 必要トラフィック（月3件成約） | 月38件 LINE登録 ／ 月126件 Bitly クリック | スケール時の集客ノルマ |
 | 平均LTV／顧客 | バックエンド ¥550,000 | 1成約あたりの売上換算（ミドルエンド購入は note.com 匿名購入と LINE登録者の紐付けが原理的に困難なため、本ファネルKPIには含めない） |
 | コホート別追跡 | LINE登録月別に層3〜4を集計 | ナーチャリング配信改善の効果検証 |
+
+**計算の前提**:
+- 主要4目標（30 / 50 / 50 / 50）に加えて、業界相場の補助KPI 2つ（層3-b 予約→出席率 75%、層4-b 申込→実施率 85%）を含めて合算
+- 業界相場値は運用開始後の実測でリプレースする（初期想定値）
+- 月1件成約のBitlyクリック逆算: 1 / 0.0239 ≈ 42件／月3件: 3 / 0.0239 ≈ 126件
+- 月1件成約のLINE登録逆算: 1 / 0.0797 ≈ 13件／月3件: 3 / 0.0797 ≈ 38件
 
 ### 3.4 設計ポリシー
 
@@ -309,9 +332,12 @@ Google Sheets を `config/strategy.json` 周辺と同じ DBレイヤーで運用
 
 1コホート（LINE登録月）＝1行。前々月コホートの60日成績が確定したタイミングで集計。
 
+**列構成**: データ列（実測値）／predicate CVR列（各サブステージ間）／compound CVR列（全体効率）の3層。
+
 | 列名 | 型 | 算出元 |
 |---|---|---|
 | `cohort_month` | text (YYYY-MM) | — |
+| **［データ列］** | | |
 | `registrations` | int | 当月の `registered_at` 行数 |
 | `seminar_reservations_30d` | int | `seminar_reserved_at - registered_at <= 30日` の行数 |
 | `seminar_attendances_30d` | int | `seminar_attended=TRUE` かつ 出席日−登録日 ≤ 30日 |
@@ -321,11 +347,21 @@ Google Sheets を `config/strategy.json` 周辺と同じ DBレイヤーで運用
 | `contracts_60d` | int | `contract_at - registered_at <= 60日`（遅延コンバージョン把握） |
 | `revenue_30d` | int | 30日以内成約の `contract_amount` 合計 |
 | `revenue_60d` | int | 60日以内成約の `contract_amount` 合計 |
-| `cvr_register_to_seminar_attended` | float | `seminar_attendances_30d / registrations` |
-| `cvr_seminar_to_consultation_implemented` | float | `consultation_implementations_30d / seminar_attendances_30d` |
-| `cvr_consultation_to_contract` | float | `contracts_30d / consultation_implementations_30d` |
-| `cvr_total_register_to_contract_30d` | float | `contracts_30d / registrations` |
-| `cvr_total_register_to_contract_60d` | float | `contracts_60d / registrations` |
+| **［predicate CVR列：各サブステージ間］** | | |
+| `cvr_register_to_reserved` | float | `seminar_reservations_30d / registrations`（≒ 層3-a 目標 **50%**） |
+| `cvr_reserved_to_attended` | float | `seminar_attendances_30d / seminar_reservations_30d`（≒ 層3-b 補助・業界相場 75%） |
+| `cvr_attended_to_requested` | float | `consultation_requests_30d / seminar_attendances_30d`（≒ 層4-a 目標 **50%**） |
+| `cvr_requested_to_implemented` | float | `consultation_implementations_30d / consultation_requests_30d`（≒ 層4-b 補助・業界相場 85%） |
+| `cvr_implemented_to_contract` | float | `contracts_30d / consultation_implementations_30d`（≒ 層4-c 目標 **50%**） |
+| **［compound CVR列：全体効率］** | | |
+| `cvr_total_register_to_contract_30d` | float | `contracts_30d / registrations`（業界相場込みの想定値 ≒ 7.97%） |
+| `cvr_total_register_to_contract_60d` | float | `contracts_60d / registrations`（遅延コンバージョン込み） |
+
+**運用上の見方**:
+- predicate CVR が業界相場（補助KPI）や目標値（主要KPI）から大きく外れたサブステージが、改善対象
+- 例: `cvr_reserved_to_attended` が 50% を切る → 予約後のリマインド設計に問題
+- 例: `cvr_requested_to_implemented` が 60% を切る → 申込から実施までの間隔／キャンセル動線に問題
+- compound CVR は全体効率の単一スコア。改善施策のビフォーアフター比較に使う
 
 ### 4.5 集計の自動／手動切り分け
 
