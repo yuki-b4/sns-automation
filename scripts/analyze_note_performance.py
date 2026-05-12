@@ -63,26 +63,58 @@ def parse_target_brain_from_proposal(content: str, title: str) -> str:
     return ""
 
 
+def _format_record_line(r: dict, brain: str) -> str:
+    """1 レコードを Markdown 箇条書き行に整形する。"""
+    title = (r.get("title") or "").strip()
+    theme = (r.get("theme_label") or "").strip()
+    gen_at = str(r.get("generated_at", ""))[:10]
+    status = str(r.get("status", "")).strip()
+    likes = r.get("likes") or ""
+    views = r.get("views") or ""
+    comments = r.get("comments") or ""
+    legacy_pattern = (r.get("combination_pattern") or "").strip()
+
+    if status == "posted":
+        metric_part = f" / 投稿済 likes={likes or '—'} views={views or '—'} comments={comments or '—'}"
+    else:
+        metric_part = f" / status={status or 'proposed'}"
+    legacy_part = f" / 旧パターン={legacy_pattern}" if legacy_pattern else ""
+    brain_part = f" / 想定刺激={brain}" if brain else ""
+    theme_part = f"[{theme}] " if theme else ""
+    return f"- {gen_at}｜{theme_part}{title}{brain_part}{metric_part}{legacy_part}"
+
+
+def _format_brain_distribution(counts: dict[str, int]) -> str:
+    """{爬虫類脳: n, ...} を「爬虫類脳 X本（Y%）/ ...」に整形する。空なら注記を返す。"""
+    total = sum(counts.values())
+    if not total:
+        return "（target_brain 取得不可・MD ファイル未読込もしくは旧スキーマレコード）"
+    parts = []
+    for key in ("爬虫類脳", "哺乳類脳", "両方"):
+        cnt = counts.get(key, 0)
+        share = cnt / total if total else 0
+        parts.append(f"{key} {cnt}本（{share:.0%}）")
+    return " / ".join(parts)
+
+
 def build_analysis_prompt(records: list[dict], article_contents: dict, threads_summary: str) -> str:
-    """Claude用の分析プロンプトを構築（テーマ・target_brain 中心）"""
+    """Claude用の分析プロンプトを構築（テーマ・target_brain 中心、posted/proposed 分離）"""
 
     today = datetime.date.today().strftime("%Y年%m月%d日")
     total = len(records)
-    posted = [r for r in records if str(r.get("status", "")).strip() == "posted"]
-    with_metrics = [r for r in posted if r.get("likes") or r.get("views")]
 
-    record_lines: list[str] = []
-    brain_counts: dict[str, int] = defaultdict(int)
+    posted_lines: list[str] = []
+    proposed_lines: list[str] = []
+    brain_counts_all: dict[str, int] = defaultdict(int)
+    brain_counts_posted: dict[str, int] = defaultdict(int)
     legacy_pattern_counts: dict[str, int] = defaultdict(int)
 
+    posted_records: list[dict] = []
+    with_metrics_count = 0
+
     for r in records:
-        title = (r.get("title") or "").strip()
-        theme = (r.get("theme_label") or "").strip()
-        gen_at = str(r.get("generated_at", ""))[:10]
         status = str(r.get("status", "")).strip()
-        likes = r.get("likes") or ""
-        views = r.get("views") or ""
-        comments = r.get("comments") or ""
+        title = (r.get("title") or "").strip()
         file_path = r.get("file_path", "")
         legacy_pattern = (r.get("combination_pattern") or "").strip()
         if legacy_pattern:
@@ -90,31 +122,21 @@ def build_analysis_prompt(records: list[dict], article_contents: dict, threads_s
 
         brain = parse_target_brain_from_proposal(article_contents.get(file_path, ""), title)
         if brain:
-            # 日本語ラベル（爬虫類脳/哺乳類脳/両方）をキーに集計
-            brain_counts[brain] += 1
+            brain_counts_all[brain] += 1
 
+        line = _format_record_line(r, brain)
         if status == "posted":
-            metric_part = f" / 投稿済 likes={likes or '—'} views={views or '—'} comments={comments or '—'}"
+            posted_records.append(r)
+            if r.get("likes") or r.get("views"):
+                with_metrics_count += 1
+            if brain:
+                brain_counts_posted[brain] += 1
+            posted_lines.append(line)
         else:
-            metric_part = f" / status={status or 'proposed'}"
-        legacy_part = f" / 旧パターン={legacy_pattern}" if legacy_pattern else ""
-        brain_part = f" / 想定刺激={brain}" if brain else ""
-        theme_part = f"[{theme}] " if theme else ""
+            proposed_lines.append(line)
 
-        record_lines.append(
-            f"- {gen_at}｜{theme_part}{title}{brain_part}{metric_part}{legacy_part}"
-        )
-
-    if brain_counts:
-        total_brain = sum(brain_counts.values())
-        parts = []
-        for key in ("爬虫類脳", "哺乳類脳", "両方"):
-            cnt = brain_counts.get(key, 0)
-            share = cnt / total_brain if total_brain else 0
-            parts.append(f"{key} {cnt}本（{share:.0%}）")
-        brain_distribution = " / ".join(parts)
-    else:
-        brain_distribution = "（取得不可・MD ファイル未読込もしくは旧スキーマレコード）"
+    brain_distribution_all = _format_brain_distribution(brain_counts_all)
+    brain_distribution_posted = _format_brain_distribution(brain_counts_posted)
 
     legacy_section = ""
     if legacy_pattern_counts:
@@ -128,27 +150,35 @@ def build_analysis_prompt(records: list[dict], article_contents: dict, threads_s
         )
 
     metrics_status = (
-        f"投稿済 {len(posted)}本 / うちメトリクス入力済 {len(with_metrics)}本"
-        if posted else "投稿済レコードなし（定性分析中心）"
+        f"投稿済 {len(posted_records)}本 / うちメトリクス入力済 {with_metrics_count}本"
+        if posted_records else "投稿済レコードなし（定性分析中心）"
     )
 
-    records_block = "\n".join(record_lines) if record_lines else "（過去4週レコードなし）"
+    posted_block = "\n".join(posted_lines) if posted_lines else "（投稿済みレコードなし）"
+    proposed_block = "\n".join(proposed_lines) if proposed_lines else "（未採択提案なし）"
 
     return f"""以下は過去4週間の note 記事データ（テーマ提案＋投稿済み記事のメトリクス）です。週次パフォーマンス分析を行ってください。
 
 ## 前提（重要）
 - 現行 `generate_note.py` は本文を書かず、3 つの「テーマ提案」を生成し note投稿DB に 3 行を append する設計
 - 1 行 = 1 つのテーマ提案。各レコードは theme_label / title / target_brain（爬虫類脳/哺乳類脳/両方）/ reason を持つ
+- **運用実態**: 生成日のうち投稿する日でも 3 提案中 1〜2 件のみ採択。投稿しない日もある。残りの提案レコードは `status='proposed'` のまま残る
+- **DB の `title` は提案時の仮タイトルで、note.com 上の実タイトルとは異なる場合がある**（運用者が改題する）。テーマ別評価は `theme_label` を主軸に行い、`title` は参考扱いとする
+- 投稿の有無は `status` 列で判定する（posted = 採択・投稿済、proposed = 未採択 or 投稿予定なし）
 - `combination_pattern` / `title_type` 等の旧スキーマ列は新規生成では空欄。値が入っている場合はレガシーで参考のみ扱い
 - 設定ファイル `config/note_writing_guide.json` は現行スクリプトから参照されない（運用者・Claude が手書きで note 本文を書くときの参考資料として残置）
 
 ## 分析対象データ（{today}時点）
-- 総レコード数: {total}本（= 3テーマ × 提案日数 + 旧仕様時代の単発記録）
+- 総レコード数: {total}本
 - {metrics_status}
-- target_brain 分布: {brain_distribution}
+- target_brain 分布（提案全体）: {brain_distribution_all}
+- target_brain 分布（投稿済みのみ）: {brain_distribution_posted}
 
-## レコード一覧
-{records_block}
+## 投稿された記事（status='posted'・パフォーマンス分析の主軸）
+{posted_block}
+
+## 未採択の提案（status='proposed'・運用者が選ばなかった = 訴求が相対的に弱いと判断されたシグナル）
+{proposed_block}
 {legacy_section}
 ## 参照元Threads投稿（直近7日）
 {threads_summary if threads_summary else "（データなし）"}
@@ -162,26 +192,33 @@ def build_analysis_prompt(records: list[dict], article_contents: dict, threads_s
 # 週次noteパフォーマンス分析レポート - {today}
 
 ## 1. パフォーマンスサマリー
+- **メトリクス分析は `status='posted'` のレコードのみで行う**（未採択提案はメトリクス計算に含めない）
 - 投稿済みレコードのメトリクス（likes / views / comments）が複数あればテーマ別／target_brain 別の平均と順位を表で
-- target_brain 分布の偏りを 1〜2 文で講評（爬虫類脳 / 哺乳類脳 / 両方 のバランス、generate_note.py の「3 テーマで偏らない」設計に対する実績）
+- target_brain 分布の偏りを 1〜2 文で講評。**「提案全体の分散」と「投稿済みの分散」の両方を見て、運用者が特定の脳タイプを偏って採択していないか**を述べる
 - 投稿済みが少なくメトリクスが薄い場合は、その旨を明記してから定性的に1〜2文で締める
 
 ## 2. テーマ別評価
-- 直近の theme_label のうち 3〜5 件について、強み（なぜそのテーマがペルソナに刺さるか）と改善点（タイトル・切り口の磨きどころ）を述べる
-- それぞれ target_brain の方向と整合しているかを評価（reptilian なら損失/縄張り訴求が効いているか、mammalian なら所属/承認訴求が効いているか）
-- 旧スキーマレコードはここでは取り上げない（または1行で簡潔に「旧仕様の○本は参考扱い」と注記するに留める）
+- **投稿された記事（status='posted'）の `theme_label` のみを対象に**、3〜5 件について強み（なぜそのテーマがペルソナに刺さるか）と改善点（切り口の磨きどころ）を述べる
+- `title` ではなく `theme_label` を中心に評価する（実タイトルは運用者が改題しているため DB の title とは異なる）
+- それぞれ target_brain の方向と整合しているかを評価（reptilian なら損失/縄張り訴求、mammalian なら所属/承認訴求）
+- 旧スキーマレコードはここでは取り上げない（または1行で簡潔に「旧仕様の○本は参考扱い」と注記）
 
-## 3. Threads → note の一貫性評価
-- 参照 Threads 投稿のテーマと note 提案テーマの一貫性
+## 3. 採択シグナル分析（運用者キュレーション）
+- **未採択提案（status='proposed'）の傾向を分析**し、運用者が選ばない切り口の共通点を 1〜2 文で述べる
+- 例: 「特定の theme 系統が連続して未採択」「特定の target_brain が採択されにくい」など
+- 提案生成プロンプト（generate_note.py）への含意がある場合は短く触れる
+
+## 4. Threads → note の一貫性評価
+- 参照 Threads 投稿のテーマと **投稿された note 記事のテーマ** の一貫性（未採択提案は除外）
 - `config/note_writing_guide.json` の `engagement_design_rules.threads_to_note_handoff` ルール（Threads投稿の問いをnote冒頭300字以内で明示的に回収）が、手書き本文フェーズで実践しやすい形になっているか
 
-## 4. 来週の推奨アクション
-- 重点的に伸ばすべき切り口（理由付き、テーマ単位で具体的に）
+## 5. 来週の推奨アクション
+- 重点的に伸ばすべき切り口（理由付き、テーマ単位で具体的に）— 投稿された記事のパフォーマンス＋採択シグナルから導く
 - 避けるべき／直近で重複気味の切り口（あれば）
-- target_brain 分散の調整提案（偏っている場合のみ）
+- target_brain 分散の調整提案（投稿済みの分散に偏りがある場合のみ）
 - テーマ × target_brain の試行案を 2〜3 件
 
-## 5. 手書きnote本文ルールへの追加提案（自由記述）
+## 6. 手書きnote本文ルールへの追加提案（自由記述）
 - このセクションは `note_writing_guide.json` の構造変更や `pattern_distribution` / `free_mode_weekly_caps` 等の**数値・キー変更を提案しない**（運用者がnote本文を手書きするときの参考に対する**追記案**のみ）
 - 例: 冒頭の引用ブロック設計／タイトル型の使い分け／Before-After の組立方／読了後アクション設計 など、運用者の執筆判断に直接役立つ短い気づきを 2〜4 件、箇条書きで
 - 既存ルール（`high_performance_patterns` / `title_anti_patterns` / `engagement_design_rules` / `title_rules`）と概念が重複する場合は提案しない
