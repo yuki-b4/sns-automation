@@ -134,7 +134,7 @@ Python スクリプトからこの DB を触る予定ができるまで、関心
 | post_0805.yml | 毎日 08:05 | 0 | 投稿生成・配信 |
 | post_0955.yml | 毎日 09:55 | 0 | 投稿生成・配信 |
 | post_1145.yml | 毎日 11:45 | 1 | 投稿生成・配信（フック形式スロット） |
-| post_1515.yml | （スケジュール停止中、手動のみ） | 2 | 投稿生成・配信 |
+| post_1515.yml | 毎日 15:15 | 2 | 投稿生成・配信 |
 | post_1805.yml | 毎日 18:05 | 3 | 投稿生成・配信 |
 | note_promo.yml | 3日に1回 20:00（cronは毎日／scriptが date.toordinal() % 3 で間引き） | — | 当日free noteを読みたくさせる3投稿構成スレッド（フック→補足→URL単独）|
 | post_2100.yml | 毎日 21:02 | 4 | 投稿生成・配信 |
@@ -154,7 +154,7 @@ README.md / DESIGN.md の時刻表は古い時代（post_0700 系）の名残り
 - すべての Python コード・コメント・ログ・プロンプト・Slack メッセージは **日本語**。生成されるコンテンツも日本語前提。
 - Claude モデルは全スクリプトで `claude-opus-4-6`。モデルを変える場合は `grep -rn "claude-opus" scripts/` で網羅的に置換する。
 - LinkedIn 関連コード（`post_linkedin.py`、`collect_metrics.py` 内の `collect_linkedin_metrics`、各ワークフローの `LINKEDIN_*` secret）は **意図的にコメントアウトで残されている**。再開時の差分を小さく保つ方針なので、「使われていないから」という理由で削除しない。
-- 投稿の `post_type` は `permission` / `structure` / `personal` / `opinion` / `dialogue` の5種＋note誘導専用の `note_promo`。`opinion` は現状 ratio=0 で停止中だが、ラベル辞書やパースからは除外しない。`note_promo` は `post_rotation` に乗らない特殊スロットで `post_note_promo.py` のみが書き込む。
+- 投稿の `post_type` は `permission` / `structure` / `personal` / `opinion` / `dialogue` の5種＋note誘導専用の `note_promo`。`note_promo` は `post_rotation` に乗らない特殊スロットで `post_note_promo.py` のみが書き込む。
 - `output/notes/` と `output/reports/` の Markdown は GitHub Actions bot が自動コミットする。手でコミットする機会は通常ない。
 - 類似度閾値 `SIMILARITY_THRESHOLD = 0.25` はチューニング済み。上げると警告漏れ、下げるとノイズ、の観察を踏まえて決まった値なので触る前に値の変更理由を明示すること。
 - `scripts/generate_post.py` / `scripts/generate_note.py` のプロンプト共通ルール／type_specific_rules／出力フォーマット、および `config/strategy.json` の `post_types.*.description` / `positioning` / `persona` など **Claude へ注入されるルール・説明文を追加・編集するときは、既存文との概念／意味内容の重複を必ず事前チェックする**こと。`description`（`build_prompt` 冒頭で注入）と `type_specific_rules`（投稿タイプ別ブロック）で同じ指示が2回並ぶ・共通ルール同士で締め方や禁止事項が二重定義される、といった事故が起きやすい。編集前に `grep` などで重複キーワード（「〜禁止」「〜しない」「〜で締める」等）を横断確認する。**重複が見つかった場合は自動判断で統合・削除せず、重複箇所と選択肢（どちらを残すか／統合するか）をユーザーに提示して判断を仰ぐこと。**
