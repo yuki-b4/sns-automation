@@ -53,19 +53,19 @@
     },
     "structure": {
       "label": "体系化系",
-      "ratio": 0.25,
+      "ratio": 0.30,
       "funnel_stage": "興味を喚起する",
       "description": "恋愛・人間関係における自分の内側のパターン（なぜ深い関係になればなるほど苦しくなるのか、なぜ自責に耐えられなくなって結局他責にしてしまうのか等）を心理学・脳科学の根拠を1つ入れて構造化して伝える。3投稿構成（ルート＋リプライ2本）で『フック→具体ステップリスト→締め』を展開する。読者を優劣で分類する対比フォーマット（『モテる人vsモテない人』等）は使わない。読者が『自分にも当てはまるかもしれない』と気づける具体メカニズムの開示を積極的に含める。読者の発見・気づき・腹落ち感を引き出す"
     },
     "personal": {
       "label": "自己開示系",
-      "ratio": 0.30,
+      "ratio": 0.15,
       "funnel_stage": "共感を引き出す",
       "description": "credibility に示された発信者自身の失敗・葛藤と、内面と向き合うことで脱却したプロセスを語る。『一度で解決した成功譚』ではなく『同じ罠を何度もくぐり抜けてきた当事者』の立場で、才能ではなく自分の内面と向き合うことで解決したという等身大の視点を必ず含める。正解提示ではなく過程・葛藤・修正をオープンに見せる。今も「さらに深い愛情を築いていく」ために向き合い続けているマインドのプロセスを意識的に見せる"
     },
     "opinion": {
       "label": "業界考察系",
-      "ratio": 0.05,
+      "ratio": 0.15,
       "funnel_stage": "興味を喚起する",
       "description": "婚活市場・マッチングアプリ業界・恋愛論ブームに対する批評を、credibility に示された発信者特有の独自視点（既婚男性当事者かつコーチ）で行う。一般向けの恋愛コラム・婚活ノウハウ・心理学トリビア紹介はNG"
     },
@@ -77,12 +77,7 @@
     }
   },
   "post_rotation": [
-    "dialogue",
     "structure",
-    "personal",
-    "permission",
-    "dialogue",
-    "personal",
     "structure",
     "personal",
     "permission",
@@ -92,10 +87,15 @@
     "personal",
     "permission",
     "dialogue",
-    "personal",
+    "dialogue",
+    "structure",
+    "dialogue",
+    "permission",
+    "opinion",
+    "opinion",
     "structure",
     "personal",
-    "dialogue",
-    "structure"
+    "structure",
+    "dialogue"
   ]
 }
