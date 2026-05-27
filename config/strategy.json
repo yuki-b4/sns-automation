@@ -47,13 +47,13 @@
   "post_types": {
     "permission": {
       "label": "許可系",
-      "ratio": 0.15,
+      "ratio": 0.10,
       "funnel_stage": "認知を獲得する",
       "description": "独身ITエンジニア・PM男性が言語化できていない苦しさを言語化し、その感覚を持っていて良い・自分を責めなくて良い・もう手放して良いと肯定する許可メッセージを発する。『〇〇じゃない』型（自責解除）と『もう〇〇しても良い』型（手放し許可）を織り交ぜる。例：『真面目に頑張ってきたあなたが恋愛で結果を出せないのは努力不足じゃない』『相手を大切にしようとして自分が苦しくなるのは優しすぎるからじゃない』『もう「自分のせい」と「タイミングのせい」を行き来するのを、終わりにして良い』『「重い」と言われた過去を、もう手放しても良い』。読者の同意・拡散・フォロー獲得につなげる"
     },
     "structure": {
       "label": "体系化系",
-      "ratio": 0.30,
+      "ratio": 0.40,
       "funnel_stage": "興味を喚起する",
       "description": "恋愛・人間関係における自分の内側のパターン（なぜ深い関係になればなるほど苦しくなるのか、なぜ自責に耐えられなくなって結局他責にしてしまうのか等）を心理学・脳科学の根拠を1つ入れて構造化して伝える。3投稿構成（ルート＋リプライ2本）で『フック→具体ステップリスト→締め』を展開する。読者を優劣で分類する対比フォーマット（『モテる人vsモテない人』等）は使わない。読者が『自分にも当てはまるかもしれない』と気づける具体メカニズムの開示を積極的に含める。読者の発見・気づき・腹落ち感を引き出す"
     },
@@ -71,31 +71,31 @@
     },
     "dialogue": {
       "label": "対話系",
-      "ratio": 0.25,
+      "ratio": 0.20,
       "funnel_stage": "共感を引き出す",
       "description": "恋愛・人間関係について自分の経験・考えを先に開示してから問いかける。『深い関係になればなるほど自分が苦しくなり始めた瞬間にどう向き合ったか』『別れ際にかけられた言葉で今も残っているもの』『相手を大切にしようとするほど苦しくなった経験』など、ペルソナが答えやすいテーマを設定する。エンゲージメントベイトは使わない。コメント反応・フォロー獲得につなげる"
     }
   },
   "post_rotation": [
     "structure",
-    "structure",
-    "personal",
-    "permission",
     "dialogue",
-    "opinion",
-    "structure",
-    "personal",
-    "permission",
-    "dialogue",
-    "dialogue",
-    "structure",
-    "dialogue",
-    "permission",
-    "opinion",
-    "opinion",
-    "structure",
     "personal",
     "structure",
-    "dialogue"
+    "opinion",
+    "structure",
+    "permission",
+    "dialogue",
+    "structure",
+    "personal",
+    "opinion",
+    "structure",
+    "dialogue",
+    "structure",
+    "personal",
+    "opinion",
+    "structure",
+    "dialogue",
+    "permission",
+    "structure"
   ]
 }
