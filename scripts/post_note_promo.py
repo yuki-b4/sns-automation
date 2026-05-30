@@ -63,7 +63,7 @@ def _build_prompt(strategy: dict, note_markdown: str) -> str:
 【ポジショニング（語り手のトーン）】
 - 立ち位置：{positioning["speaker"]}
 - ToBe（読者の到達点）：{positioning["tobe"]}
-- 差別化メソッド：{positioning["differentiation"]}
+- 差別化軸：{positioning["differentiation"]}
 
 【ターゲット読者（このnoteを読ませたい相手）】
 {persona["description"]}
