@@ -158,7 +158,7 @@ def build_prompt(strategy: dict, post_type: str, recent_posts: list[dict] | None
 - 立ち位置：{positioning["speaker"]}
 - credibility（一次経験ソース）：
 {chr(10).join(f"  - {c}" for c in positioning["credibility"])}
-- 差別化メソッド：{positioning["differentiation"]}
+- 差別化軸：{positioning["differentiation"]}
 
 【読者の到達点（ToBe）】{positioning["tobe"]}
 【ToBeを阻む構造】{positioning["tobe_barrier"]}
