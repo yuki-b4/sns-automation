@@ -113,7 +113,7 @@ def propose_three_themes(
 {chr(10).join(f"- {c}" for c in positioning["credibility"])}
 【ToBe（読者の到達点）】{positioning["tobe"]}
 【ToBeを阻む構造】{positioning["tobe_barrier"]}
-【差別化メソッド】{positioning["differentiation"]}
+【差別化軸（曲げない信念＋それを届けるメソッド）】{positioning["differentiation"]}
 【ミドルエンド商品】{midend.get("title", "")}（¥{midend.get("price_min", 500)}〜{midend.get("price_max", 4980)}）
 ミドルエンドの役割：{funnel.get("midend_role", "")}
 【バックエンド商品】{backend.get("title", "")}（¥{backend.get("price", 550000)}）
@@ -136,7 +136,8 @@ def propose_three_themes(
 {past_themes_text}
 
 【提案ルール】
-- ペルソナの pain_point を中心に据え、上記 ToBe・ToBeを阻む構造・差別化メソッドに整合させる
+- ペルソナの pain_point を中心に据え、上記 ToBe・ToBeを阻む構造・差別化軸に整合させる
+- 各テーマは上記【差別化軸】に挙げた“曲げない信念”のいずれかに必ず根ざし、その信念に読者を共鳴させる角度で立てる。中立的な情報提供・一般論で完結する切り口（発信者でなくても・AIでも量産できる切り口）は採らない。ここで求めるのは逆説や常識否定といった“言い回しの型”ではなく、発信者が実際に曲げない価値観そのものの明示である
 - 3 テーマで target_brain が偏らないようにする（爬虫類脳寄り 2 + 哺乳類脳寄り 1、もしくは "both" を 1 つ含める等、刺激ルートを分散）
 - 上記「過去noteで扱ったテーマ」と意味的に被らない（同じ単語の言い換えだけの近接テーマは避ける）
 - 抽象的な大テーマ（例: 「人間関係について」「結婚について」）ではなく、記事 1 本で扱える具体的な切り口にする
