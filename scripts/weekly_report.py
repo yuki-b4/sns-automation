@@ -111,7 +111,7 @@ def generate_report(strategy: dict, own_summary: str, competitor_summary: str, p
 【ポジショニング】
 - 立ち位置：{positioning["speaker"]}
 - ToBe（読者の到達点）：{positioning["tobe"]}
-- 差別化軸：{positioning["differentiation"]}
+- 差別化軸（曲げない信念＋それを届けるメソッド）：{positioning["differentiation"]}
 
 【現在の投稿タイプ配分】
 {current_ratios}
