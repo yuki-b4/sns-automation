@@ -144,6 +144,7 @@ Python スクリプトからこの DB を触る予定ができるまで、関心
 | note_generate.yml | 毎日 07:00 | — | 無料note ドラフト生成・自動コミット |
 | note_analyze.yml | 月 10:00 | — | note 4週分析・レポートをコミット |
 | db_update_reminder.yml | 日/月/木 01:00 | — | 分析前の DB 更新リマインド |
+| threads_token_reminder.yml | 毎日 12:00（失効7日前以内の日だけ通知／窓外はscriptが即終了） | — | Threadsトークン失効リマインド（`config/threads_token.json` の `token_updated_at` 起点） |
 
 cron は UTC 指定。JST と9時間ずれるので、時刻を編集するときは両方ずらす必要がある点に注意。
 
