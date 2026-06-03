@@ -1,0 +1,6 @@
+{
+  "_note": "Threadsトークン失効リマインドの起点。THREADS_TOKEN を更新したら token_updated_at をその日付(YYYY-MM-DD)に書き換えてコミットすること。これを忘れると notify_threads_token_expiry.py のリマインドが誤った日付で発火する。",
+  "token_updated_at": "2026-06-03",
+  "valid_days": 60,
+  "remind_days_before": 7
+}

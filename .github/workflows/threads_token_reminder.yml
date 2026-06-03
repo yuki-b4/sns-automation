@@ -1,0 +1,24 @@
+name: Threads Token Expiry Reminder 12:00 JST (Daily)
+
+on:
+  schedule:
+    # JST 12:00 毎日 = UTC 03:00
+    # config/threads_token.json の token_updated_at + valid_days を失効予定日とし、
+    # 残りが remind_days_before 日以内の日だけ Slack 通知する（窓の外の日は即終了）
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  remind:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Send Threads token expiry reminder to Slack
+        run: python scripts/notify_threads_token_expiry.py
+        env:
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_USER_ID: ${{ secrets.SLACK_USER_ID }}

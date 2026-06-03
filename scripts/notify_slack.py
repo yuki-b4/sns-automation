@@ -255,6 +255,62 @@ def notify_slack_db_update_reminder(analysis_labels: list[str], run_time_label: 
     ])
 
 
+def notify_slack_token_expiry_reminder(days_left: int, expiry_date: str, updated_at: str) -> None:
+    """Threadsトークン失効前のリマインド通知（メンション付き）。
+    days_left:   失効予定日までの残り日数（負値は失効済み）
+    expiry_date: 失効予定日 YYYY-MM-DD
+    updated_at:  現在設定中トークンの更新日 YYYY-MM-DD（config/threads_token.json 由来）
+    """
+    mention = _user_mention_prefix()
+    if days_left < 0:
+        header = "🔑 Threadsトークンが失効しました"
+        lead = (
+            f"{mention}Threadsトークンは *{expiry_date}* に失効した見込みです"
+            f"（{-days_left}日経過）。投稿・メトリクス収集が停止します。至急更新してください。"
+        )
+    elif days_left == 0:
+        header = "🔑 Threadsトークンが本日失効します"
+        lead = (
+            f"{mention}Threadsトークンは *本日（{expiry_date}）* に失効する見込みです。"
+            "投稿が停止する前に更新してください。"
+        )
+    else:
+        header = f"🔑 Threadsトークンの失効が近づいています（あと{days_left}日）"
+        lead = (
+            f"{mention}Threadsトークンは *{expiry_date}* に失効する見込みです"
+            f"（現在のトークン更新日: {updated_at}）。早めに更新してください。"
+        )
+
+    steps = (
+        "*更新手順*\n"
+        "1. Meta for Developers で短期トークンを取得し、`th_exchange_token` で長期トークンに交換\n"
+        "2. リポジトリの Secret `THREADS_TOKEN` を新しい長期トークンで上書き\n"
+        "3. `config/threads_token.json` の `token_updated_at` を更新日に書き換えてコミット"
+        "（これを忘れると本リマインドが誤った日付で再発火します）"
+    )
+
+    _post_to_slack([
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": header},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": lead},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": steps},
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": "🔑 更新が完了すれば次回失効が近づくまでこの通知は止まります"}
+            ],
+        },
+    ])
+
+
 def notify_slack_report(report_text: str, title: str = "改善レポート", body: str = "") -> None:
     """レポート生成完了をSlackに通知。
     body が指定された場合はその本文を直接Slackメッセージに含める（最大2800字）。
