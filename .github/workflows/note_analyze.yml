@@ -1,8 +1,10 @@
 name: Analyze Note Performance
 
 on:
-  schedule:
-    - cron: '0 1 * * 1'  # UTC 01:00 月曜 = JST 10:00 月曜（日曜の週を振り返る）
+  # 一時停止中（2026-06-16〜）: note生成・レポート群を停止し、Threads投稿のみ稼働させる運用。
+  # 再開する場合は下の schedule 節のコメントを外す。手動実行(workflow_dispatch)は引き続き可能。
+  # schedule:
+  #   - cron: '0 1 * * 1'  # UTC 01:00 月曜 = JST 10:00 月曜（日曜の週を振り返る）
   workflow_dispatch:
 
 jobs:

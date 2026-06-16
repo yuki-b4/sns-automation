@@ -264,11 +264,11 @@ def generate_post(post_type: str, strategy: dict, recent_posts: list[dict] | Non
     threads_prompt = build_prompt(strategy, post_type, recent_posts)
     max_tokens = 1024 if post_type == "structure" else 768
     threads_message = client.messages.create(
-        model="claude-opus-4-6",
+        model="claude-opus-4-8",
         max_tokens=max_tokens,
         messages=[{"role": "user", "content": threads_prompt}],
     )
-    log_token_cost("claude-opus-4-6", threads_message.usage, "generate_post")
+    log_token_cost("claude-opus-4-8", threads_message.usage, "generate_post")
     threads_result = _parse_post(threads_message.content[0].text.strip())
 
     return {

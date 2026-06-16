@@ -1,8 +1,10 @@
 name: Twice-Weekly Report 09:00 JST (Wed/Sat)
 
 on:
-  schedule:
-    - cron: '0 0 * * 3,6'  # UTC 00:00 Wed/Sat = JST 09:00 水曜・土曜
+  # 一時停止中（2026-06-16〜）: note生成・レポート群を停止し、Threads投稿のみ稼働させる運用。
+  # 再開する場合は下の schedule 節のコメントを外す。手動実行(workflow_dispatch)は引き続き可能。
+  # schedule:
+  #   - cron: '0 0 * * 3,6'  # UTC 00:00 Wed/Sat = JST 09:00 水曜・土曜
   workflow_dispatch:
 
 jobs:

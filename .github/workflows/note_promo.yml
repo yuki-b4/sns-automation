@@ -6,8 +6,10 @@ name: Note Promo Threads (Every 3 days 20:00 JST)
 #   （月末/年末を跨いでも常に3日間隔を維持するため）。
 # - 当日のnote原稿が無い、または note投稿DB の url 列が空ならスクリプト側でスキップしSlack通知。
 on:
-  schedule:
-    - cron: '0 11 * * *'  # UTC 11:00 = JST 20:00
+  # 一時停止中（2026-06-16〜）: note生成停止に伴い当日note原稿が出ないため、本配信も停止。
+  # 再開する場合は下の schedule 節のコメントを外す。手動実行(workflow_dispatch)は引き続き可能。
+  # schedule:
+  #   - cron: '0 11 * * *'  # UTC 11:00 = JST 20:00
   workflow_dispatch:
 
 jobs:
