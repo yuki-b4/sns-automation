@@ -59,7 +59,7 @@ index = ((day_of_year - 1) * 5 + POST_SLOT) % len(rotation)
 
 ### ポジショニング・ペルソナは strategy.json に集約
 投稿生成／競合分析／週次レポート／note 生成の4スクリプトすべてが `config/strategy.json` を読む。変更するときは下流全部に影響する前提で編集する:
-- `positioning`: speaker / credibility（配列・3項目） / tobe / tobe_barrier / differentiation / `midend_product` (title/price_min/price_max) / `backend_product` (title/price)。商品体系は **バックエンド = 愛を深め続けるマインド構築講座（¥550,000）／ミドルエンド = 理想の相手の見つけ方ガイド（有料noteシリーズ ¥500〜4,980）** で構成され、`generate_note.py` の3テーマ提案プロンプトに「導線として機能する切り口を選ぶ」根拠として渡される。商品の `description` フィールドは持たず、ファネル上の役割は `funnel.midend_role` / `funnel.backend_path` に集約。
+- `positioning`: speaker / credibility（配列・3項目） / tobe / tobe_barrier / differentiation / `midend_product` (title/price_min/price_max) / `backend_product` (title/price)。商品体系は **バックエンド = 愛される自分を取り戻すパートナーシップ講座（¥550,000・講座型3〜10名・結婚歴3〜15年の既婚女性限定）／ミドルエンド = 夫に本音が言えなくなってきた時に読みたい愛されガイド（有料noteシリーズ ¥500〜4,980）** で構成され、`generate_note.py` の3テーマ提案プロンプトに「導線として機能する切り口を選ぶ」根拠として渡される。商品の `description` フィールドは持たず、ファネル上の役割は `funnel.midend_role` / `funnel.backend_path` に集約。
 - `funnel`: 消費者心理5段階（認知→共感→興味→理解→納得）の `stages` 配列＋ `stage_intents`（動詞化 intent のマップ）、`sns_role` / `midend_role` / `backend_path` で SNS／midend／backend の役割を1〜2行で明示。`post_types.*.funnel_stage` から `stage_intents` の動詞を間接参照する設計。SNS（Threads／無料note）は認知/共感/興味段階を担当し、最大KPIは公式LINE登録。バックエンドは SNS から直接誘導しない（理解→納得→クロージングの3段階を経由）。
 - `persona`: description / pain_points（プロンプトに注入される）
 - `post_types`: 各タイプの label / description / ratio / funnel_stage（動詞形：「認知を獲得する」「共感を引き出す」等）
@@ -67,7 +67,7 @@ index = ((day_of_year - 1) * 5 + POST_SLOT) % len(rotation)
 
 発信者の事実情報（結婚・子どもの有無・キャリア年数など）と、そこから派生する自己開示スタンスは `docs/author_profile.md` に切り出してある。実行時には参照されず、`generate_post.py` / `generate_note.py` の共通ルールにハードコードされた制約の**根拠ドキュメント**として扱う。
 
-投稿本文に関するポリシー（数字の丸め方、否定型フックの禁止、マイナス語での自己表現の禁止、`内側のパターン` 語句の読者所有明示〔`あなたの／自分の` を冠する〕、研究結果・統計数値・著者名等の本文記載禁止 など）は `generate_post.py:build_prompt` の「共通ルール」ブロックに集中している。プロンプトを編集するときはそこを起点に探すこと。
+投稿本文に関するポリシー（数字の丸め方、否定型フックの禁止、マイナス語での自己表現の禁止、`思考・行動のクセ` 語句の読者所有明示〔`あなたの／自分の` を冠する〕、研究結果・統計数値・著者名等の本文記載禁止 など）は `generate_post.py:build_prompt` の「共通ルール」ブロックに集中している。プロンプトを編集するときはそこを起点に探すこと。
 
 ### Google Sheets がシステムの唯一の永続ストレージ
 DB は Google Sheets の 5 タブ。`scripts/sheets.py` が Python 側の全アクセスを仲介し、各タブ名を決め打ちで参照する（関心テーマDB だけは Claude Code Routines 側から Sheets MCP 経由で書き込まれるため `sheets.py` を通らない）:
@@ -91,7 +91,7 @@ gspread は数値IDを科学表記に暗黙変換するため、`sheets._normali
 - 同時に **note投稿DB に 3 行を `status='proposed'` で append**（同じ `generated_at` / `file_path` で 3 行・各 `title` は `title_candidate`、`theme_label` / `theme_description`(=reason) を埋める。`combination_pattern` / `*_type` / `ref_threads_post_ids` / `selling_element_ids` / `selected_*` 列は空欄）。運用者は 1 つを選んで note.com 用本文を別途作成し、投稿後に `url` / `status='posted'` を手動更新する。
 - `analyze_note_performance.py` は同様に `output/reports/YYYY-MM-DD_note_analysis.md` をコミット。
 - Slack 通知（`notify_slack_note`）は代表タイトル（先頭テーマ）+ GitHub blob URL のみで、本文・他2案は載せない（トークン節約＋詳細は GitHub view で確認）。
-- 本文生成・組み合わせパターン選択・writing_guide 注入・selling_elements・angle_combo は **このスクリプトからは廃止済み**。`config/note_writing_guide.json` は現行 `generate_note.py` からは参照されないが、**運用者または Claude がこのリポジトリ内で note 記事本文を作成・編集するとき（提案された 3 テーマから 1 つ選んで note.com 用本文を書く工程）は必ずこのファイルを参照すること**（タイトル型 / 冒頭フック型 / 課題提示型 / 解決法型 / 高エンゲージメント実証パターン / Threads→note 引き継ぎ設計 / 有料note の売れる要素チェックリスト / `engagement_design_rules` に集約されている `inner_pattern_phrasing_rule`〔`内側のパターン` を `あなたの／自分の` 付きで使う〕／ `negation_assertion_pattern_limit`〔『〇〇ではなく〇〇です』型レトリックの上限2箇所＋分散レトリック列挙〕／ `research_citation_rule`〔本文に出典情報を織り込まず `（※N）` 脚注マーカー＋記事末 `## 参考文献` セクションで管理〕 が集約されている）。将来的に本文生成を再開する可能性も考えてファイル自体は残置している。
+- 本文生成・組み合わせパターン選択・writing_guide 注入・selling_elements・angle_combo は **このスクリプトからは廃止済み**。`config/note_writing_guide.json` は現行 `generate_note.py` からは参照されないが、**運用者または Claude がこのリポジトリ内で note 記事本文を作成・編集するとき（提案された 3 テーマから 1 つ選んで note.com 用本文を書く工程）は必ずこのファイルを参照すること**（タイトル型 / 冒頭フック型 / 課題提示型 / 解決法型 / 高エンゲージメント実証パターン / Threads→note 引き継ぎ設計 / 有料note の売れる要素チェックリスト / `engagement_design_rules` に集約されている `inner_pattern_phrasing_rule`〔`思考・行動のクセ` を `あなたの／自分の` 付きで使う〕／ `negation_assertion_pattern_limit`〔『〇〇ではなく〇〇です』型レトリックの上限2箇所＋分散レトリック列挙〕／ `research_citation_rule`〔本文に出典情報を織り込まず `（※N）` 脚注マーカー＋記事末 `## 参考文献` セクションで管理〕 が集約されている）。将来的に本文生成を再開する可能性も考えてファイル自体は残置している。
 
 ### note誘導Threads配信（3日に1回 20:00 JST）
 `scripts/post_note_promo.py` は当日の `output/notes/YYYY-MM-DD_free.md` を読み、note記事を読みたくさせる「フック本文＋補足リプライ1＋URL単独リプライ2」の3投稿構成スレッドを配信する。
