@@ -118,7 +118,8 @@ def analyze_with_claude(posts: list[dict], strategy: dict) -> str:
 
     message = client.messages.create(
         model="claude-opus-5",
-        max_tokens=8192,
+        max_tokens=2048,
+        thinking={"type": "disabled"},
         output_config={"effort": "high"},
         messages=[{"role": "user", "content": prompt}],
     )

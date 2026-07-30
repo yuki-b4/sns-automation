@@ -276,7 +276,8 @@ def main():
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     message = client.messages.create(
         model="claude-opus-5",
-        max_tokens=8192,
+        max_tokens=4000,
+        thinking={"type": "disabled"},
         output_config={"effort": "high"},
         messages=[{"role": "user", "content": prompt}],
     )
