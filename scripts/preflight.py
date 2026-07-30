@@ -107,16 +107,31 @@ def check_google_sheets() -> None:
     print(f"[Preflight] Google Sheets OK: {spreadsheet.title}")
 
 
-def run_all() -> None:
-    """全チェックを実行。1つでも失敗したら処理を中断する"""
+_CHECKS = {
+    "threads": ("Threads", check_threads),
+    "slack": ("Slack", check_slack),
+    "sheets": ("Google Sheets", check_google_sheets),
+}
+
+DEFAULT_CHECKS = ("threads", "slack", "sheets")
+
+
+def run_all(checks: tuple[str, ...] = DEFAULT_CHECKS) -> None:
+    """指定チェックを実行。1つでも失敗したら処理を中断する。
+
+    checks を絞れるのは Threads へ投稿しないスクリプト（投稿アイデア生成など）のため。
+    Threadsトークンが失効していても、Threadsを使わない処理まで巻き込んで
+    止めないようにする。省略時は従来通り全チェックを実行する。
+    """
     print("[Preflight] 事前チェック開始...")
     errors = []
 
-    for name, check_fn in [
-        ("Threads", check_threads),
-        ("Slack", check_slack),
-        ("Google Sheets", check_google_sheets),
-    ]:
+    unknown = [c for c in checks if c not in _CHECKS]
+    if unknown:
+        raise ValueError(f"[Preflight] 未知のチェック名: {unknown}（利用可能: {list(_CHECKS)}）")
+
+    for key in checks:
+        name, check_fn = _CHECKS[key]
         try:
             check_fn()
         except Exception as e:

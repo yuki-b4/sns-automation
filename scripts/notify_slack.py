@@ -63,6 +63,76 @@ def notify_slack(content: str, post_type: str, title: str = "Threads投稿完了
     ])
 
 
+def notify_slack_post_ideas(ideas: list[dict], date_str: str, github_url: str) -> None:
+    """Threads投稿アイデア提案の完了通知。
+    各案の「投稿タイプ／テーマラベル／フック候補」だけを載せ、切り口・根拠の詳細は
+    GitHub 側で確認する前提でSlackには載せない（note通知と同じ流儀）。"""
+    lines = []
+    for i, idea in enumerate(ideas, start=1):
+        post_type = idea.get("post_type", "")
+        label = POST_TYPE_LABELS.get(post_type, post_type)
+        lines.append(
+            f"*提案{i}｜{label}*\n"
+            f"{idea.get('theme_label', '')}\n"
+            f"> {idea.get('hook_candidate', '')}"
+        )
+    _post_to_slack([
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": f"💡 Threads投稿アイデア（{date_str}）"},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "\n\n".join(lines)[:2800]},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "切り口・狙いの詳細はGitHubで確認してください。"},
+            "accessory": {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "アイデアを開く"},
+                "url": github_url,
+            },
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": "✍️ 1案選んで本文を書き、Threadsへ手動投稿してください"}
+            ],
+        },
+    ])
+
+
+def notify_slack_post_ideas_failure(stage: str, error: str) -> None:
+    """投稿アイデア生成の致命的失敗をSlackに通知（メンション付き）。
+    stage: 失敗工程名（例: "3案提案生成"）
+    error: 例外メッセージや失敗理由の詳細（長い場合は先頭500字に切り詰める）"""
+    mention = _user_mention_prefix()
+    error_excerpt = (error or "（詳細なし）").strip()
+    if len(error_excerpt) > 500:
+        error_excerpt = error_excerpt[:500] + "…"
+    _post_to_slack([
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": "❌ 投稿アイデア生成失敗"},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"{mention}*失敗工程:* {stage}"},
+        },
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": f"*原因:*\n```\n{error_excerpt}\n```"},
+        },
+        {
+            "type": "context",
+            "elements": [
+                {"type": "mrkdwn", "text": "🔧 ワークフローログを確認し、必要に応じて手動で再実行してください"}
+            ],
+        },
+    ])
+
+
 def notify_slack_note(title: str, mode: str, github_url: str) -> None:
     """noteテーマ提案生成完了をSlackに通知。代表タイトル＋GitHub URLのみを送信。"""
     mode_label = "無料note" if mode == "free" else "有料note"
