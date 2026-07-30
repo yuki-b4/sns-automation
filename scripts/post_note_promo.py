@@ -125,12 +125,14 @@ def _generate_hook(strategy: dict, note_markdown: str) -> dict:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     prompt = _build_prompt(strategy, note_markdown)
     message = client.messages.create(
-        model="claude-opus-4-6",
-        max_tokens=600,
+        model="claude-opus-5",
+        max_tokens=4096,
+        output_config={"effort": "high"},
         messages=[{"role": "user", "content": prompt}],
     )
-    log_token_cost("claude-opus-4-6", message.usage, "post_note_promo")
-    return _parse(message.content[0].text.strip())
+    log_token_cost("claude-opus-5", message.usage, "post_note_promo")
+    # thinking ON のとき content 先頭が thinking ブロックになり得るため text ブロックを明示抽出
+    return _parse(next((b.text for b in message.content if b.type == "text"), "").strip())
 
 
 def main() -> None:

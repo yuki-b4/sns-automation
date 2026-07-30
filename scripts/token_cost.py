@@ -8,9 +8,10 @@ _MODEL_PRICING: dict[str, dict[str, float]] = {
     "claude-opus-4-6": {"input": 5.0, "output": 25.0},
     "claude-opus-4-7": {"input": 5.0, "output": 25.0},
     "claude-opus-4-8": {"input": 5.0, "output": 25.0},
+    "claude-opus-5": {"input": 5.0, "output": 25.0},
 }
 
-_DEFAULT_MODEL = "claude-opus-4-6"
+_DEFAULT_MODEL = "claude-opus-5"
 
 
 def calc_token_cost(model: str, input_tokens: int, output_tokens: int) -> float:

@@ -262,7 +262,8 @@ def generate_post(post_type: str, strategy: dict, recent_posts: list[dict] | Non
     # Threads用コンテンツ生成
     # structure は3投稿構成のため adaptive thinking を ON にし、思考トークンが本文を
     # 圧迫しないよう max_tokens を 4096 に拡張する。他タイプは thinking OFF（disabled）。
-    # effort は指定せず API デフォルト（high）のまま。
+    # effort は output_config で high を明示（disabled は effort high 以下でのみ許可。
+    # xhigh / max と組み合わせると 400 になる）。
     threads_prompt = build_prompt(strategy, post_type, recent_posts)
     if post_type == "structure":
         max_tokens = 4096
@@ -271,12 +272,13 @@ def generate_post(post_type: str, strategy: dict, recent_posts: list[dict] | Non
         max_tokens = 768
         thinking = {"type": "disabled"}
     threads_message = client.messages.create(
-        model="claude-opus-4-8",
+        model="claude-opus-5",
         max_tokens=max_tokens,
         thinking=thinking,
+        output_config={"effort": "high"},
         messages=[{"role": "user", "content": threads_prompt}],
     )
-    log_token_cost("claude-opus-4-8", threads_message.usage, "generate_post")
+    log_token_cost("claude-opus-5", threads_message.usage, "generate_post")
     # thinking ON のとき content 先頭が thinking ブロックになり得るため text ブロックを明示抽出
     threads_text = next((b.text for b in threads_message.content if b.type == "text"), "")
     threads_result = _parse_post(threads_text.strip())

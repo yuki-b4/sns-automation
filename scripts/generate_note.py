@@ -156,15 +156,17 @@ def propose_three_themes(
 
     try:
         message = client.messages.create(
-            model="claude-opus-4-7",
-            max_tokens=900,
+            model="claude-opus-5",
+            max_tokens=4096,
+            output_config={"effort": "high"},
             messages=[{"role": "user", "content": prompt}],
         )
     except Exception as e:
         raise ThemeGenerationError(f"Claude API呼び出しに失敗: {type(e).__name__}: {e}") from e
 
-    log_token_cost("claude-opus-4-7", message.usage, "generate_note_themes")
-    raw = message.content[0].text.strip()
+    log_token_cost("claude-opus-5", message.usage, "generate_note_themes")
+    # thinking ON のとき content 先頭が thinking ブロックになり得るため text ブロックを明示抽出
+    raw = next((b.text for b in message.content if b.type == "text"), "").strip()
     # ```json などのフェンス除去
     if raw.startswith("```"):
         raw = re.sub(r"^```(?:json)?\s*", "", raw)
