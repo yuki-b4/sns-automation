@@ -157,7 +157,8 @@ def propose_three_themes(
     try:
         message = client.messages.create(
             model="claude-opus-5",
-            max_tokens=4096,
+            max_tokens=900,
+            thinking={"type": "disabled"},
             output_config={"effort": "high"},
             messages=[{"role": "user", "content": prompt}],
         )

@@ -126,7 +126,10 @@ def _generate_hook(strategy: dict, note_markdown: str) -> dict:
     prompt = _build_prompt(strategy, note_markdown)
     message = client.messages.create(
         model="claude-opus-5",
-        max_tokens=4096,
+        # 旧 600（Opus 4.6 基準）。Opus 4.7 以降はトークナイザが変わり同じ本文でも
+        # 最大1.35倍のトークン数になるため、余裕を見て 900 とする。
+        max_tokens=900,
+        thinking={"type": "disabled"},
         output_config={"effort": "high"},
         messages=[{"role": "user", "content": prompt}],
     )

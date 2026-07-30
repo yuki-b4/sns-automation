@@ -154,7 +154,8 @@ README.md / DESIGN.md の時刻表は古い時代（post_0700 系）の名残り
 
 - すべての Python コード・コメント・ログ・プロンプト・Slack メッセージは **日本語**。生成されるコンテンツも日本語前提。
 - Claude モデルは全スクリプトで `claude-opus-5`、effort は `output_config={"effort": "high"}` を明示指定。モデルを変える場合は `grep -rn "claude-opus" scripts/` で網羅的に置換し、`token_cost.py:_MODEL_PRICING` に料金行を追加する。
-- **Opus 5 は `thinking` を省略すると adaptive thinking が ON になる**（Opus 4.6〜4.8 は省略＝OFF だった）。`max_tokens` は thinking と本文の合計に効くため、`thinking` 未指定のスクリプトは本文だけを見積もった値だと途中で切れる。また thinking ON では `content` の先頭が thinking ブロックになり得るので、本文は必ず `next((b.text for b in message.content if b.type == "text"), "")` で text ブロックを明示抽出すること（`content[0].text` は AttributeError になる）。
+- **Opus 5 は `thinking` を省略すると adaptive thinking が ON になる**（Opus 4.6〜4.8 は省略＝OFF だった）。`max_tokens` は thinking と本文の合計に効くため、省略すると本文だけを見積もった値では途中で切れる。この既定に依存しないよう **全スクリプトが `thinking` を明示指定する**方針で、`generate_post.py` の structure のみ `{"type": "adaptive"}`（3投稿構成のため）、それ以外は全て `{"type": "disabled"}`。新しく Claude を叩くスクリプトを足すときも `thinking` を必ず明示すること。
+- thinking ON のとき `content` の先頭は thinking ブロックになり得るので、本文は必ず `next((b.text for b in message.content if b.type == "text"), "")` で text ブロックを明示抽出する（`content[0].text` は AttributeError になる）。thinking OFF のスクリプトでも既定変更に備えて同じ書き方で統一している。
 - `thinking={"type": "disabled"}` は **effort が high 以下のときのみ許可**。`xhigh` / `max` と組み合わせると 400 になる。
 - LinkedIn 関連コード（`post_linkedin.py`、`collect_metrics.py` 内の `collect_linkedin_metrics`、各ワークフローの `LINKEDIN_*` secret）は **意図的にコメントアウトで残されている**。再開時の差分を小さく保つ方針なので、「使われていないから」という理由で削除しない。
 - 投稿の `post_type` は `permission` / `structure` / `personal` / `opinion` / `dialogue` の5種＋note誘導専用の `note_promo`。`note_promo` は `post_rotation` に乗らない特殊スロットで `post_note_promo.py` のみが書き込む。
