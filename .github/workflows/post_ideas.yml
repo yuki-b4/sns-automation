@@ -1,0 +1,36 @@
+name: Generate Post Ideas 07:00 JST
+
+# 当日のThreads投稿アイデアを3案提案し、output/ideas/YYYY-MM-DD.md にコミットして
+# Slackへ通知する。Threadsへの自動投稿は行わない（本文は運用者が書いて手動投稿する）。
+on:
+  schedule:
+    - cron: '0 22 * * *'  # UTC 22:00 = JST 07:00
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install -r requirements.txt
+      - name: Generate post ideas
+        # THREADS_* は渡さない（preflight の threads チェックを外しているため不要）
+        run: python scripts/generate_post_ideas.py
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SLACK_WEBHOOK: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_USER_ID: ${{ secrets.SLACK_USER_ID }}
+          GOOGLE_SHEETS_ID: ${{ secrets.GOOGLE_SHEETS_ID }}
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+      - name: Commit and push generated ideas
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/ideas/
+          git diff --staged --quiet || git commit -m "chore: generate post ideas $(date +%Y-%m-%d)"
+          git push

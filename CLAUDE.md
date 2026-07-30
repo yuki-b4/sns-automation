@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 SNS運用（Threads中心、note副次）の全工程—投稿生成→配信→メトリクス収集→競合分析→戦略改善レポート—を GitHub Actions + Python + Claude API で自動化する。ランタイムは全て GitHub Actions runner 上で、`pip install -r requirements.txt` → `python scripts/<name>.py` という単純なパターン。ローカルテスト・ビルド・lint は無い。
 
+**現行の稼働形態（2026-07-30〜）**: Threads への自動投稿は停止し、**毎日 07:00 JST に投稿アイデアを3案提案して Slack へ送る**運用に切り替えている（`post_ideas.yml` / `scripts/generate_post_ideas.py`）。本文執筆と Threads への投稿は運用者が手動で行う。旧・自動投稿系（`post_*.yml` 6本 + `generate_post.py`）は `schedule` をコメントアウトして残置してあり、`workflow_dispatch` での手動実行と、本文執筆ルールの参照元としては生きている。
+
 ## Development commands
 
 ローカル実行するときの典型フロー（全スクリプトは scripts/ 直下、リポジトリルートから実行する想定で相対パスが組まれている）:
@@ -22,7 +24,10 @@ export SLACK_USER_ID=...                # メンション用、未設定可
 export GOOGLE_SHEETS_ID=...
 export GOOGLE_SERVICE_ACCOUNT_JSON='{"type":"service_account",...}'   # JSON文字列
 
-# 投稿生成・配信（POST_SLOT 必須、0〜4）
+# 投稿アイデア生成（現行の主系統・毎日07:00 JST）
+python scripts/generate_post_ideas.py
+
+# 投稿生成・配信（自動実行は停止中。手動実行のみ。POST_SLOT 必須、0〜4）
 POST_SLOT=0 python scripts/generate_post.py
 
 # 他の主要スクリプト
@@ -43,12 +48,29 @@ python scripts/notify_db_update_reminder.py     # DB 更新リマインド Slack
 ### Claude API 課金を守る preflight パターン
 `scripts/preflight.py` の `run_all()` を **Claude API 呼び出し前に必ず実行**する。Threads 認証 / Slack Webhook / Google Sheets 接続のいずれかが失敗した時点で `SystemExit(1)` し、Anthropic API への無駄課金を防ぐのが目的。`generate_post.py:main` の先頭がこの契約を体現している。新しく Claude を叩くスクリプトを追加する際は同じ順番（preflight → 生成 → 配信 → 記録）を踏襲すること。
 
+`run_all(checks=...)` で実行するチェックを絞れる（既定は `("threads", "slack", "sheets")` の全実行なので既存呼び出しは無変更で従来通り）。**Threads へ投稿しないスクリプトは `threads` を外す**こと—Threads トークン失効が Threads と無関係な処理まで巻き込んで止めるのを防ぐため。`generate_post_ideas.py` は `checks=("slack", "sheets")` で呼んでいる。
+
 Slack の疎通チェックは「`text` フィールド欠落 JSON を POST → `HTTP 400 no_text` または `invalid_payload` を成功とみなす」サイレント方式。チャンネルに可視メッセージを残さないためにあえてエラー応答で判定しているので、書き換える際は挙動を壊さないこと（`preflight.py:check_slack`）。Slack 側は時期によってレスポンス文字列が `no_text` と `invalid_payload` で揺れるため両方受理する。
 
-### 投稿タイプと POST_SLOT によるローテーション
+### 投稿アイデア生成パイプライン（現行の主系統）
+`scripts/generate_post_ideas.py` は **本文を書かず、当日の Threads 投稿アイデアを3案提案する**だけのスクリプト。Threads API には一切触らない。出力は各案ごとに `post_type`（Python 側がローテーションで決定）/ `theme_label`（8〜18字）/ `angle`（切り口・80字以内）/ `hook_candidate`（ルート1行案・20〜40字）/ `reason`（150字以内）。Claude API 呼び出しは1回のみ。
+
+- 生成結果は `output/ideas/YYYY-MM-DD.md` に「## 提案1〜3」のフォーマットで書き出し、ワークフローが `git commit && git push` する（`post_ideas.yml` 参照）。
+- Slack 通知（`notify_slack_post_ideas`）は各案の「タイプ／テーマラベル／フック候補」だけを載せ、`angle` / `reason` は GitHub blob URL 側で確認させる（note 通知と同じ流儀）。生成完了通知なのでメンションは付けない。生成失敗時のみ `notify_slack_post_ideas_failure`（メンション付き）で停止理由を通知して `SystemExit(1)`。
+- **テーマ重複回避の主軸は `output/ideas/*.md` の読み戻し**（`load_recent_idea_labels`・直近30日）。自動投稿を止めた以上、投稿DBには新規行が積まれず14日で空になるため。投稿DB（直近14日のルート投稿・`load_recent_posts`）も併せてプロンプトに渡すが、Sheets 読み取り失敗時は空リストで続行し生成自体はブロックしない。
+- Markdown の見出し行 `## 提案N: <theme_label>` は `_IDEA_HEADING_RE` が読み戻す前提。**`save_ideas_md` の書式を変えるときは正規表現も必ず揃える**こと（崩れると重複回避が黙って効かなくなる）。
+- プロンプトが持つルールは「アイデア設計」＋「`hook_candidate` の書き方」に限定してある。`hook_candidate` はルート1行の案なので `generate_post.py` の共通ルールのうちフックに効くもの（否定型の入り禁止／標語化した断定で締めない／研究・統計の引用禁止／読者を優劣で分類する対比の禁止／`思考・行動のクセ` の読者所有明示／emダッシュ禁止／一人称「僕」）だけを**最小限のサブセットとして**持たせている。**本文執筆時のルール（共通ルール全文／型カタログ）の正本は引き続き `generate_post.py:build_prompt`** で、運用者または Claude が Threads 本文を書くときはそちらを参照する。アイデア側のプロンプトを共通ルールの写しに育てないこと（二重管理になり、片側だけ古くなる）。
+
+### 投稿タイプのローテーション
 投稿タイプは `config/strategy.json` の `post_rotation` 配列（長さ20、`permission`/`structure`/`personal`/`dialogue`/`opinion` のいずれか）。
 
-決定式は `generate_post.py:determine_post_type`:
+現行の決定式は `generate_post_ideas.py:determine_post_types`（1日1回・3案まとめて取り出す）:
+```
+index = ((day_of_year - 1) * 3 + i) % len(rotation)   # i = 0..2、day_of_year は JST 基準
+```
+rotation長20と3案は互いに素なので20日で全要素を1周し、出現比は `ratio`（structure 40% / dialogue 20% / personal 15% / opinion 15% / permission 10%）と一致する。案数を変えるときは `IDEA_COUNT` を変えるが、`len(rotation)` と互いに素でない値（4・5・10等）を選ぶと一部の index が永久に選ばれなくなる点に注意。連続する3案に同じタイプが混じることはある（例: `structure, opinion, structure`）ので、プロンプト側で「同じタイプが複数割り当てられた場合は切り口を明確に変える」と指示している。
+
+停止中の自動投稿系（`generate_post.py:determine_post_type`）の決定式は以下で、こちらは残置してある:
 ```
 index = ((day_of_year - 1) * 5 + POST_SLOT) % len(rotation)
 ```
@@ -58,7 +80,7 @@ index = ((day_of_year - 1) * 5 + POST_SLOT) % len(rotation)
 `structure` 投稿は3投稿構成（本文＋補足リプライ1＋補足リプライ2）、他は2投稿構成。`_parse_post` が `【本文】`/`【補足リプライ1】`/`【補足リプライ2】`/`【補足リプライ】` マーカーでパースするので、プロンプト側の出力フォーマットを変更する場合はパーサと歩調を合わせること。
 
 ### ポジショニング・ペルソナは strategy.json に集約
-投稿生成／競合分析／週次レポート／note 生成の4スクリプトすべてが `config/strategy.json` を読む。変更するときは下流全部に影響する前提で編集する:
+投稿アイデア生成／投稿生成／競合分析／週次レポート／note 生成の5スクリプトすべてが `config/strategy.json` を読む。変更するときは下流全部に影響する前提で編集する:
 - `positioning`: speaker / credibility（配列・3項目） / tobe / tobe_barrier / differentiation / `midend_product` (title/price_min/price_max) / `backend_product` (title/price)。商品体系は **バックエンド = 愛される自分を取り戻すパートナーシップ講座（¥550,000・講座型3〜10名・結婚歴3〜15年の既婚女性限定）／ミドルエンド = 夫に本音が言えなくなってきた時に読みたい愛されガイド（有料noteシリーズ ¥500〜4,980）** で構成され、`generate_note.py` の3テーマ提案プロンプトに「導線として機能する切り口を選ぶ」根拠として渡される。商品の `description` フィールドは持たず、ファネル上の役割は `funnel.midend_role` / `funnel.backend_path` に集約。
 - `funnel`: 消費者心理5段階（認知→共感→興味→理解→納得）の `stages` 配列＋ `stage_intents`（動詞化 intent のマップ）、`sns_role` / `midend_role` / `backend_path` で SNS／midend／backend の役割を1〜2行で明示。`post_types.*.funnel_stage` から `stage_intents` の動詞を間接参照する設計。SNS（Threads／無料note）は認知/共感/興味段階を担当し、最大KPIは公式LINE登録。バックエンドは SNS から直接誘導しない（理解→納得→クロージングの3段階を経由）。
 - `persona`: description / pain_points（プロンプトに注入される）
@@ -67,7 +89,7 @@ index = ((day_of_year - 1) * 5 + POST_SLOT) % len(rotation)
 
 発信者の事実情報（結婚・子どもの有無・キャリア年数など）と、そこから派生する自己開示スタンスは `docs/author_profile.md` に切り出してある。実行時には参照されず、`generate_post.py` / `generate_note.py` の共通ルールにハードコードされた制約の**根拠ドキュメント**として扱う。
 
-投稿本文に関するポリシー（数字の丸め方、否定型フックの禁止、マイナス語での自己表現の禁止、`思考・行動のクセ` 語句の読者所有明示〔`あなたの／自分の` を冠する〕、研究結果・統計数値・著者名等の本文記載禁止 など）は `generate_post.py:build_prompt` の「共通ルール」ブロックに集中している。プロンプトを編集するときはそこを起点に探すこと。
+投稿本文に関するポリシー（数字の丸め方、否定型フックの禁止、マイナス語での自己表現の禁止、`思考・行動のクセ` 語句の読者所有明示〔`あなたの／自分の` を冠する〕、研究結果・統計数値・著者名等の本文記載禁止 など）は `generate_post.py:build_prompt` の「共通ルール」ブロックに集中している。プロンプトを編集するときはそこを起点に探すこと。自動投稿は停止したが、**このブロックは Threads 本文執筆ルールの正本として引き続き有効**で、`generate_post_ideas.py` が提案した3案から1つ選んで本文を書く工程では必ずここを参照する（`config/note_writing_guide.json` が note 本文執筆の参照元として残置されているのと同じ扱い）。
 
 ### Google Sheets がシステムの唯一の永続ストレージ
 DB は Google Sheets の 5 タブ。`scripts/sheets.py` が Python 側の全アクセスを仲介し、各タブ名を決め打ちで参照する（関心テーマDB だけは Claude Code Routines 側から Sheets MCP 経由で書き込まれるため `sheets.py` を通らない）:
@@ -122,31 +144,42 @@ gspread は数値IDを科学表記に暗黙変換するため、`sheets._normali
 - 課金源が `ANTHROPIC_API_KEY`（従量）ではなく **Claude.ai サブスクリプション枠**。そのため `preflight.py` の「Claude API 課金を守る」契約の外側で動く
 - 実行基盤が Anthropic 管理インフラ。ローカル再現不可（`python scripts/...` では動かせない）
 - Sheets 書き込みは `sheets.py` を経由せず Sheets MCP 経由で直接。gspread の `_normalize_id` も通らないので、関心テーマDB は ID 正規化を必要とするカラムを持たせない方針
-- 下流スクリプトは関心テーマDB を**参照しない**（現状維持）。将来注入を始める場合は `sheets.py` に読み取り関数を追加して `generate_post.py:build_prompt` に差す
+- 下流スクリプトは関心テーマDB を**参照しない**（現状維持）。将来注入を始める場合は `sheets.py` に読み取り関数を追加して `generate_post_ideas.py:build_prompt`（自動投稿を再開するなら `generate_post.py:build_prompt` も）に差す
 - 失敗時・情報不足時の Slack 通知規約はプロンプト側に埋め込み済み（成功・失敗・高スコア item ゼロの 3 系統で必ず 1 通は出す）
 
 Python スクリプトからこの DB を触る予定ができるまで、関心テーマDB は「運用者が目視でネタを拾う資料置き場」として独立運用する。
 
 ## Workflow スケジュール（JST／現行）
 
+**稼働中**（`schedule` が有効なもの）:
+
 | Workflow | 時刻 / cron | POST_SLOT | 用途 |
 |---|---|---|---|
-| post_0805.yml | 毎日 08:05 | 0 | 投稿生成・配信 |
-| post_0955.yml | 毎日 09:55 | 0 | 投稿生成・配信 |
-| post_1145.yml | 毎日 11:45 | 1 | 投稿生成・配信（フック形式スロット） |
-| post_1515.yml | 毎日 15:15 | 2 | 投稿生成・配信 |
-| post_1805.yml | 毎日 18:05 | 3 | 投稿生成・配信 |
-| note_promo.yml | 3日に1回 20:00（cronは毎日／scriptが date.toordinal() % 3 で間引き） | — | 当日free noteを読みたくさせる3投稿構成スレッド（フック→補足→URL単独）|
-| post_2100.yml | 毎日 21:02 | 4 | 投稿生成・配信 |
-| daily_metrics.yml | 毎日 06:00 | — | 直近30日分のメトリクス upsert |
-| competitor.yml | 火・金 08:00 | — | 競合投稿DB の未分析行を分析 |
-| weekly_report.yml | 水・土 09:00 | — | 直近4日＋競合で改善レポート |
-| note_generate.yml | 毎日 07:00 | — | 無料note ドラフト生成・自動コミット |
-| note_analyze.yml | 月 10:00 | — | note 4週分析・レポートをコミット |
 | db_update_reminder.yml | 日/月/木 01:00 | — | 分析前の DB 更新リマインド |
+| daily_metrics.yml | 毎日 06:00 | — | 直近30日分のメトリクス upsert |
+| post_ideas.yml | 毎日 07:00 | — | 投稿アイデア3案の提案・`output/ideas/` へ自動コミット・Slack通知 |
 | threads_token_reminder.yml | 毎日 12:00（失効7日前以内の日だけ通知／窓外はscriptが即終了） | — | Threadsトークン失効リマインド（`config/threads_token.json` の `token_updated_at` 起点） |
 
+**停止中**（`schedule` をコメントアウト。`workflow_dispatch` の手動実行のみ可能）:
+
+| Workflow | 停止時の時刻 / cron | POST_SLOT | 停止時期 / 用途 |
+|---|---|---|---|
+| post_0805.yml | 毎日 08:05 | 0 | 2026-07-30〜／投稿生成・配信 |
+| post_0955.yml | 毎日 09:55 | 0 | 2026-07-30〜／投稿生成・配信 |
+| post_1145.yml | 毎日 11:45 | 1 | 2026-07-30〜／投稿生成・配信（フック形式スロット） |
+| post_1515.yml | 毎日 15:15 | 2 | 2026-07-30〜／投稿生成・配信 |
+| post_1805.yml | 毎日 18:05 | 3 | 2026-07-30〜／投稿生成・配信 |
+| post_2100.yml | 毎日 21:02 | 4 | 2026-07-30〜／投稿生成・配信 |
+| competitor.yml | 火・金 08:00 | — | 2026-06-16〜／競合投稿DB の未分析行を分析 |
+| weekly_report.yml | 水・土 09:00 | — | 2026-06-16〜／直近4日＋競合で改善レポート |
+| note_generate.yml | 毎日 07:00 | — | 2026-06-16〜／無料note テーマ提案・自動コミット |
+| note_analyze.yml | 月 10:00 | — | 2026-06-16〜／note 4週分析・レポートをコミット |
+| note_promo.yml | 3日に1回 20:00（cronは毎日／scriptが date.toordinal() % 3 で間引き） | — | 2026-06-16〜／当日free noteを読みたくさせる3投稿構成スレッド（フック→補足→URL単独）|
+| update_note_metrics.yml | （cronなし・元から手動専用） | — | note投稿DB のメトリクス更新（dry-run / apply） |
+
 cron は UTC 指定。JST と9時間ずれるので、時刻を編集するときは両方ずらす必要がある点に注意。
+
+Threads への自動投稿が止まったため投稿DBには新規行が積まれないが、`daily_metrics.yml` は既存投稿を対象に走り続ける（`get_recent_post_ids(days=2)` が空になれば実質no-op）。`threads_token_reminder.yml` もメトリクス収集にトークンが要るため稼働を維持している。
 
 README.md / DESIGN.md の時刻表は古い時代（post_0700 系）の名残りなので、ワークフロー実体と差異があるときは **ワークフローファイルが真**。
 
@@ -154,11 +187,11 @@ README.md / DESIGN.md の時刻表は古い時代（post_0700 系）の名残り
 
 - すべての Python コード・コメント・ログ・プロンプト・Slack メッセージは **日本語**。生成されるコンテンツも日本語前提。
 - Claude モデルは全スクリプトで `claude-opus-5`、effort は `output_config={"effort": "high"}` を明示指定。モデルを変える場合は `grep -rn "claude-opus" scripts/` で網羅的に置換し、`token_cost.py:_MODEL_PRICING` に料金行を追加する。
-- **Opus 5 は `thinking` を省略すると adaptive thinking が ON になる**（Opus 4.6〜4.8 は省略＝OFF だった）。`max_tokens` は thinking と本文の合計に効くため、省略すると本文だけを見積もった値では途中で切れる。この既定に依存しないよう **全スクリプトが `thinking` を明示指定する**方針で、`generate_post.py` の structure のみ `{"type": "adaptive"}`（3投稿構成のため）、それ以外は全て `{"type": "disabled"}`。新しく Claude を叩くスクリプトを足すときも `thinking` を必ず明示すること。
+- **Opus 5 は `thinking` を省略すると adaptive thinking が ON になる**（Opus 4.6〜4.8 は省略＝OFF だった）。`max_tokens` は thinking と本文の合計に効くため、省略すると本文だけを見積もった値では途中で切れる。この既定に依存しないよう **全スクリプトが `thinking` を明示指定する**方針で、`generate_post.py` の structure のみ `{"type": "adaptive"}`（3投稿構成のため）、それ以外は全て `{"type": "disabled"}`。新しく Claude を叩くスクリプトを足すときも `thinking` を必ず明示すること。`generate_post_ideas.py` も `{"type": "disabled"}`。
 - thinking ON のとき `content` の先頭は thinking ブロックになり得るので、本文は必ず `next((b.text for b in message.content if b.type == "text"), "")` で text ブロックを明示抽出する（`content[0].text` は AttributeError になる）。thinking OFF のスクリプトでも既定変更に備えて同じ書き方で統一している。
 - `thinking={"type": "disabled"}` は **effort が high 以下のときのみ許可**。`xhigh` / `max` と組み合わせると 400 になる。
 - LinkedIn 関連コード（`post_linkedin.py`、`collect_metrics.py` 内の `collect_linkedin_metrics`、各ワークフローの `LINKEDIN_*` secret）は **意図的にコメントアウトで残されている**。再開時の差分を小さく保つ方針なので、「使われていないから」という理由で削除しない。
 - 投稿の `post_type` は `permission` / `structure` / `personal` / `opinion` / `dialogue` の5種＋note誘導専用の `note_promo`。`note_promo` は `post_rotation` に乗らない特殊スロットで `post_note_promo.py` のみが書き込む。
-- `output/notes/` と `output/reports/` の Markdown は GitHub Actions bot が自動コミットする。手でコミットする機会は通常ない。
+- `output/ideas/` と `output/notes/` と `output/reports/` の Markdown は GitHub Actions bot が自動コミットする。手でコミットする機会は通常ない。`output/ideas/` は投稿アイデアの履歴であると同時に**テーマ重複回避の入力そのもの**なので、過去ファイルを整理・削除すると重複チェックの効きが落ちる点に注意。
 - 類似度閾値 `SIMILARITY_THRESHOLD = 0.25` はチューニング済み。上げると警告漏れ、下げるとノイズ、の観察を踏まえて決まった値なので触る前に値の変更理由を明示すること。
-- `scripts/generate_post.py` / `scripts/generate_note.py` のプロンプト共通ルール／type_specific_rules／出力フォーマット、および `config/strategy.json` の `post_types.*.description` / `positioning` / `persona` など **Claude へ注入されるルール・説明文を追加・編集するときは、既存文との概念／意味内容の重複を必ず事前チェックする**こと。`description`（`build_prompt` 冒頭で注入）と `type_specific_rules`（投稿タイプ別ブロック）で同じ指示が2回並ぶ・共通ルール同士で締め方や禁止事項が二重定義される、といった事故が起きやすい。編集前に `grep` などで重複キーワード（「〜禁止」「〜しない」「〜で締める」等）を横断確認する。**重複が見つかった場合は自動判断で統合・削除せず、重複箇所と選択肢（どちらを残すか／統合するか）をユーザーに提示して判断を仰ぐこと。**
+- `scripts/generate_post_ideas.py` / `scripts/generate_post.py` / `scripts/generate_note.py` のプロンプト共通ルール／type_specific_rules／出力フォーマット、および `config/strategy.json` の `post_types.*.description` / `positioning` / `persona` など **Claude へ注入されるルール・説明文を追加・編集するときは、既存文との概念／意味内容の重複を必ず事前チェックする**こと。`description`（`build_prompt` 冒頭で注入）と `type_specific_rules`（投稿タイプ別ブロック）で同じ指示が2回並ぶ・共通ルール同士で締め方や禁止事項が二重定義される、といった事故が起きやすい。編集前に `grep` などで重複キーワード（「〜禁止」「〜しない」「〜で締める」等）を横断確認する。**重複が見つかった場合は自動判断で統合・削除せず、重複箇所と選択肢（どちらを残すか／統合するか）をユーザーに提示して判断を仰ぐこと。**
