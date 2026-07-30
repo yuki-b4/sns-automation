@@ -275,12 +275,14 @@ def main():
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     message = client.messages.create(
-        model="claude-opus-4-7",
-        max_tokens=4000,
+        model="claude-opus-5",
+        max_tokens=8192,
+        output_config={"effort": "high"},
         messages=[{"role": "user", "content": prompt}],
     )
-    log_token_cost("claude-opus-4-7", message.usage, "analyze_note_performance")
-    report = message.content[0].text.strip()
+    log_token_cost("claude-opus-5", message.usage, "analyze_note_performance")
+    # thinking ON のとき content 先頭が thinking ブロックになり得るため text ブロックを明示抽出
+    report = next((b.text for b in message.content if b.type == "text"), "").strip()
 
     filepath = save_report(report, date_str)
     rel_path = f"output/reports/{date_str}_note_analysis.md"
