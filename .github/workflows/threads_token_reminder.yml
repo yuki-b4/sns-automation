@@ -1,11 +1,15 @@
 name: Threads Token Expiry Reminder 12:00 JST (Daily)
 
 on:
-  schedule:
-    # JST 12:00 毎日 = UTC 03:00
-    # config/threads_token.json の token_updated_at + valid_days を失効予定日とし、
-    # 残りが remind_days_before 日以内の日だけ Slack 通知する（窓の外の日は即終了）
-    - cron: '0 3 * * *'
+  # 一時停止中（2026-08-08〜）: 定時実行は投稿アイデア生成（post_ideas.yml・07:00 JST）のみに絞る運用。
+  # メトリクス収集（daily_metrics.yml）も停止したため、Threadsトークンを使う定時ジョブが無くなった。
+  # メトリクス収集や自動投稿を再開するときは、このリマインドも併せて再開すること
+  # （トークンが失効したまま気づけなくなるため）。手動実行(workflow_dispatch)は引き続き可能。
+  # schedule:
+  #   # JST 12:00 毎日 = UTC 03:00
+  #   # config/threads_token.json の token_updated_at + valid_days を失効予定日とし、
+  #   # 残りが remind_days_before 日以内の日だけ Slack 通知する（窓の外の日は即終了）
+  #   - cron: '0 3 * * *'
   workflow_dispatch:
 
 jobs:

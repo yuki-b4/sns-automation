@@ -171,17 +171,19 @@ Python スクリプトからこの DB を触る予定ができるまで、関心
 
 **稼働中**（`schedule` が有効なもの）:
 
+**定時実行は `post_ideas.yml` の1本だけ**（2026-08-08〜）。他は全て `schedule` をコメントアウトしてある。
+
 | Workflow | 時刻 / cron | POST_SLOT | 用途 |
 |---|---|---|---|
-| db_update_reminder.yml | 日/月/木 01:00 | — | 分析前の DB 更新リマインド |
-| daily_metrics.yml | 毎日 06:00 | — | 直近30日分のメトリクス upsert |
 | post_ideas.yml | 毎日 07:00 | — | 投稿アイデア3案の提案・`output/ideas/` へ自動コミット・Slack通知 |
-| threads_token_reminder.yml | 毎日 12:00（失効7日前以内の日だけ通知／窓外はscriptが即終了） | — | Threadsトークン失効リマインド（`config/threads_token.json` の `token_updated_at` 起点） |
 
 **停止中**（`schedule` をコメントアウト。`workflow_dispatch` の手動実行のみ可能）:
 
 | Workflow | 停止時の時刻 / cron | POST_SLOT | 停止時期 / 用途 |
 |---|---|---|---|
+| daily_metrics.yml | 毎日 06:00 | — | 2026-08-08〜／直近30日分のメトリクス upsert |
+| db_update_reminder.yml | 日/月/木 01:00 | — | 2026-08-08〜／分析前の DB 更新リマインド |
+| threads_token_reminder.yml | 毎日 12:00（失効7日前以内の日だけ通知／窓外はscriptが即終了） | — | 2026-08-08〜／Threadsトークン失効リマインド（`config/threads_token.json` の `token_updated_at` 起点） |
 | post_0805.yml | 毎日 08:05 | 0 | 2026-07-30〜／投稿生成・配信 |
 | post_0955.yml | 毎日 09:55 | 0 | 2026-07-30〜／投稿生成・配信 |
 | post_1145.yml | 毎日 11:45 | 1 | 2026-07-30〜／投稿生成・配信（フック形式スロット） |
@@ -197,7 +199,12 @@ Python スクリプトからこの DB を触る予定ができるまで、関心
 
 cron は UTC 指定。JST と9時間ずれるので、時刻を編集するときは両方ずらす必要がある点に注意。
 
-Threads への自動投稿が止まったため投稿DBには新規行が積まれないが、`daily_metrics.yml` は既存投稿を対象に走り続ける（`get_recent_post_ids(days=2)` が空になれば実質no-op）。`threads_token_reminder.yml` もメトリクス収集にトークンが要るため稼働を維持している。
+**メトリクス収集・リマインド系を止めたことの含意**（2026-08-08）:
+
+- `daily_metrics.yml` を止めたので、**メトリクスDBは自動更新されない**。Threads のインサイトが必要になったら `workflow_dispatch` で手動実行する。ただし Threads API のインサイトは取得可能期間に限りがあるため、長期間放置した分は遡って取れない可能性がある
+- `threads_token_reminder.yml` も止めた。定時実行で Threads トークンを使うジョブが無くなったための措置だが、**トークンが失効しても通知されない**。`daily_metrics.yml` や自動投稿を再開するときは、このリマインドも併せて再開すること
+- `db_update_reminder.yml` はリマインド先（note週次分析・競合分析）が既に停止中で単独で動かす意味が薄いため停止
+- `post_ideas.yml` は Threads API に触れないので、トークンが失効していても動き続ける（preflight も `checks=("slack", "sheets")` で Threads を外してある）
 
 README.md / DESIGN.md の時刻表は古い時代（post_0700 系）の名残りなので、ワークフロー実体と差異があるときは **ワークフローファイルが真**。
 
