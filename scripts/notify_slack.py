@@ -65,16 +65,22 @@ def notify_slack(content: str, post_type: str, title: str = "Threads投稿完了
 
 def notify_slack_post_ideas(ideas: list[dict], date_str: str, github_url: str) -> None:
     """Threads投稿アイデア提案の完了通知。
-    各案の「投稿タイプ／テーマラベル／フック候補」だけを載せ、切り口・根拠の詳細は
-    GitHub 側で確認する前提でSlackには載せない（note通知と同じ流儀）。"""
+    各案の「投稿タイプ／テーマラベル／フック候補」だけを載せ、切り口・補足リプライ要素・
+    CTA・根拠の詳細は GitHub 側で確認する前提でSlackには載せない（note通知と同じ流儀）。
+    読者の大半はルート1行目でフォローを判断するため、フック候補は全案分を載せる。"""
     lines = []
     for i, idea in enumerate(ideas, start=1):
         post_type = idea.get("post_type", "")
         label = POST_TYPE_LABELS.get(post_type, post_type)
+        star = "⭐ " if idea.get("priority") == 1 else ""
+        hook_lines = "\n".join(
+            f"> （{h.get('type', '')}）{h.get('text', '')}"
+            for h in idea.get("hook_candidates", [])
+        )
         lines.append(
-            f"*提案{i}｜{label}*\n"
+            f"*{star}提案{i}｜{label}*\n"
             f"{idea.get('theme_label', '')}\n"
-            f"> {idea.get('hook_candidate', '')}"
+            f"{hook_lines}"
         )
     _post_to_slack([
         {
@@ -87,7 +93,10 @@ def notify_slack_post_ideas(ideas: list[dict], date_str: str, github_url: str) -
         },
         {
             "type": "section",
-            "text": {"type": "mrkdwn", "text": "切り口・狙いの詳細はGitHubで確認してください。"},
+            "text": {
+                "type": "mrkdwn",
+                "text": "切り口・補足リプライの要素・フォロー誘導CTA・狙いはGitHubで確認してください。",
+            },
             "accessory": {
                 "type": "button",
                 "text": {"type": "plain_text", "text": "アイデアを開く"},
@@ -97,7 +106,7 @@ def notify_slack_post_ideas(ideas: list[dict], date_str: str, github_url: str) -
         {
             "type": "context",
             "elements": [
-                {"type": "mrkdwn", "text": "✍️ 1案選んで本文を書き、Threadsへ手動投稿してください"}
+                {"type": "mrkdwn", "text": "✍️ ⭐が本日の推し。1案選んでフックを決め、本文を書いてThreadsへ手動投稿してください"}
             ],
         },
     ])
