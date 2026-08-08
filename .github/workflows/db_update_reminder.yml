@@ -1,10 +1,13 @@
 name: DB Update Reminder 01:00 JST (Mon/Tue/Fri)
 
 on:
-  schedule:
-    # JST 01:00 月/火/金 = UTC 16:00 日/月/木
-    # 月 10:00 JST のnote週次分析、火・金 08:00 JST の競合分析の前にDB更新を促す
-    - cron: '0 16 * * 0,1,4'
+  # 一時停止中（2026-08-08〜）: 定時実行は投稿アイデア生成（post_ideas.yml・07:00 JST）のみに絞る運用。
+  # そもそもリマインド先の note週次分析・競合分析が停止中のため、単独で動かす意味が薄い。
+  # 再開する場合は下の schedule 節のコメントを外す。手動実行(workflow_dispatch)は引き続き可能。
+  # schedule:
+  #   # JST 01:00 月/火/金 = UTC 16:00 日/月/木
+  #   # 月 10:00 JST のnote週次分析、火・金 08:00 JST の競合分析の前にDB更新を促す
+  #   - cron: '0 16 * * 0,1,4'
   workflow_dispatch:
 
 jobs:
