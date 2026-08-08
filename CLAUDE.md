@@ -167,6 +167,16 @@ gspread は数値IDを科学表記に暗黙変換するため、`sheets._normali
 
 Python スクリプトからこの DB を触る予定ができるまで、関心テーマDB は「運用者が目視でネタを拾う資料置き場」として独立運用する。
 
+### tools/ は SNS 自動化パイプラインの外側
+
+`tools/` に置くのは **GitHub Actions から一切呼ばれない、運用者がローカルで手打ちする補助スクリプト**。`scripts/` とは無関係で、`requirements.txt` にも依存を足さない（標準ライブラリのみ）。ワークフローから呼び出す形に育てないこと。
+
+現在の中身は法人（B2B）側の事業開発向けで、SNS 運用とは別系統:
+- `tools/observation_ledger_score.py` … 事業ロードマップ スプレッドシート `観測台帳` シートの数式（境界判定／継続週数／スコア／ランク）を再現し、貼り付け前に表記ゆれを検出する検算スクリプト。手順は `docs/observation_ledger_collection.md`
+- `tools/observation_ledger_template.tsv` … 上記の入力テンプレート（30件・貼り付けブロック順の14列）
+
+スプレッドシート側の配点（`マスタ_選択肢と配点`）を変更したら、`observation_ledger_score.py` の `INDUSTRY_POINTS` / `TRIGGER_POINTS` と `docs/observation_ledger_collection.md` §8 の控えも揃えること（正本はスプレッドシート）。
+
 ## Workflow スケジュール（JST／現行）
 
 **稼働中**（`schedule` が有効なもの）:
