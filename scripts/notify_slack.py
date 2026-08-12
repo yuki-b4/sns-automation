@@ -65,9 +65,11 @@ def notify_slack(content: str, post_type: str, title: str = "Threads投稿完了
 
 def notify_slack_post_ideas(ideas: list[dict], date_str: str, github_url: str) -> None:
     """Threads投稿アイデア提案の完了通知。
-    各案の「投稿タイプ／テーマラベル／フック候補」だけを載せ、切り口・補足リプライ要素・
-    CTA・根拠の詳細は GitHub 側で確認する前提でSlackには載せない（note通知と同じ流儀）。
-    読者の大半はルート1行目でフォローを判断するため、フック候補は全案分を載せる。"""
+    各案の「投稿タイプ／テーマラベル／設計骨格（理想状態・手段の名前）／フック候補」だけを載せ、
+    切り口・補足リプライ要素・効かせる条件・CTA・根拠の詳細は GitHub 側で確認する前提で
+    Slackには載せない（note通知と同じ流儀）。
+    読者の大半はルート1行目でフォローを判断するため、フック候補は全案分を載せる。
+    骨格の2層はフックの良し悪しを判断する基準そのものなので、フックと並べて見せる。"""
     lines = []
     for i, idea in enumerate(ideas, start=1):
         post_type = idea.get("post_type", "")
@@ -77,9 +79,15 @@ def notify_slack_post_ideas(ideas: list[dict], date_str: str, github_url: str) -
             f"> （{h.get('type', '')}）{h.get('text', '')}"
             for h in idea.get("hook_candidates", [])
         )
+        # 骨格が欠けた辞書（旧形式）を渡されても落とさず、その行だけ省く
+        skeleton = " ／ ".join(
+            v for v in (idea.get("ideal_state", ""), idea.get("method_name", "")) if v
+        )
+        skeleton_line = f"🎯 {skeleton}\n" if skeleton else ""
         lines.append(
             f"*{star}提案{i}｜{label}*\n"
             f"{idea.get('theme_label', '')}\n"
+            f"{skeleton_line}"
             f"{hook_lines}"
         )
     _post_to_slack([
@@ -95,7 +103,7 @@ def notify_slack_post_ideas(ideas: list[dict], date_str: str, github_url: str) -
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": "切り口・補足リプライの要素・フォロー誘導CTA・狙いはGitHubで確認してください。",
+                "text": "切り口・補足リプライの要素・効かせる条件・フォロー誘導CTA・狙いはGitHubで確認してください。",
             },
             "accessory": {
                 "type": "button",

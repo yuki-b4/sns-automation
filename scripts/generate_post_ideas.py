@@ -32,6 +32,16 @@ SELECTION_NOTE_MAX_LEN = 80
 HOOK_PER_IDEA = 2       # 各案が出すフック候補の数（必ず異なる型で出させる）
 REPLY_ITEM_MIN = 3      # 補足リプライ1で開く要素の下限
 REPLY_ITEM_MAX = 5      # 同上限
+
+# 投稿の設計骨格（ideal_state / method_name / method_caveat）の字数レンジ。
+# 実測の高パフォーマンス投稿から起こした2層構造の寸法で、詳細は build_prompt の
+# 【投稿の設計骨格】ブロックを参照。レンジ外でも警告のみで生成はブロックしない。
+IDEAL_STATE_MIN_LEN = 15
+IDEAL_STATE_MAX_LEN = 35
+METHOD_NAME_MIN_LEN = 8
+METHOD_NAME_MAX_LEN = 20
+METHOD_CAVEAT_MIN_LEN = 30
+METHOD_CAVEAT_MAX_LEN = 60
 RECENT_IDEA_DAYS = 30   # 過去アイデア（output/ideas/*.md）を遡る日数
 RECENT_POST_DAYS = 14   # 投稿DBの実投稿を遡る日数
 RECENT_HOOK_TYPE_DAYS = 14  # フック型の偏りを見るために遡る日数
@@ -65,8 +75,13 @@ HOOK_TYPES = {
 }
 
 # save_ideas_md が書き出す見出し（`## 提案1: テーマラベル`）から
-# テーマラベルを読み戻すための正規表現。書式を変えるときは両方を揃えること。
+# テーマラベルを読み戻すための正規表現。書式を変えるときは3系統すべてを揃えること。
 _IDEA_HEADING_RE = re.compile(r"^##\s*提案\d+[:：]\s*(.+?)\s*$")
+
+# save_ideas_md が書き出す理想状態行（`- **理想状態**: ...`）から
+# 状態の言語化を読み戻すための正規表現。ideal_state は「浮気されない」「愛される」等の
+# 大枠の願いに収束しやすいため、テーマラベルとは別軸で重複回避に使う。
+_IDEAL_STATE_RE = re.compile(r"^-\s*\*\*理想状態\*\*[:：]\s*(.+?)\s*$")
 
 # save_ideas_md が書き出すフック候補行（`  1. （ベネフィット直球型）...`）から
 # 型名を読み戻すための正規表現。フック型の偏りを検出するために使う。
@@ -116,18 +131,33 @@ def _iter_recent_idea_files(days: int):
         yield stem, content
 
 
+def _load_recent_matches(pattern: re.Pattern, key: str, days: int) -> list[dict]:
+    """output/ideas/*.md の各行を pattern に当て、捕捉群を {date, key} の形で集める。
+    パースに失敗しても空リストを返すだけで生成はブロックしない（重複回避が効かなくなるだけ）。"""
+    results: list[dict] = []
+    for stem, content in _iter_recent_idea_files(days):
+        for line in content.splitlines():
+            m = pattern.match(line)
+            if m:
+                results.append({"date": stem, key: m.group(1)})
+    return results
+
+
 def load_recent_idea_labels(days: int = RECENT_IDEA_DAYS) -> list[dict]:
     """過去に提案したテーマラベルを output/ideas/*.md から読み出す。
 
     投稿を止めた後は投稿DBに新規行が積まれないため、テーマ重複回避の主軸はこちら。
     """
-    results: list[dict] = []
-    for stem, content in _iter_recent_idea_files(days):
-        for line in content.splitlines():
-            m = _IDEA_HEADING_RE.match(line)
-            if m:
-                results.append({"date": stem, "theme_label": m.group(1)})
-    return results
+    return _load_recent_matches(_IDEA_HEADING_RE, "theme_label", days)
+
+
+def load_recent_ideal_states(days: int = RECENT_IDEA_DAYS) -> list[dict]:
+    """過去に提案した理想状態（設計骨格の第1層）を output/ideas/*.md から読み出す。
+
+    テーマラベルが違っても ideal_state が「浮気されない」等に毎回収束すると
+    フックが同じ顔になるため、テーマとは別軸で被りを見せる。
+    """
+    return _load_recent_matches(_IDEAL_STATE_RE, "ideal_state", days)
 
 
 def load_recent_hook_type_counts(days: int = RECENT_HOOK_TYPE_DAYS) -> dict[str, int]:
@@ -156,16 +186,22 @@ def load_recent_posts(days: int = RECENT_POST_DAYS) -> list[dict]:
         return []
 
 
-def build_avoid_section(recent_ideas: list[dict], recent_posts: list[dict]) -> str:
-    """過去アイデアのテーマラベルと直近実投稿の冒頭を、重複回避用の入力に整形する。"""
+def _dedup_dated_lines(records: list[dict], key: str) -> list[str]:
+    """{date, key} のレコード列を「- 日付｜値」の行に整形する（値の重複は落とす）。"""
     lines: list[str] = []
     seen: set[str] = set()
-    for r in recent_ideas:
-        label = (r.get("theme_label") or "").strip()
-        if not label or label in seen:
+    for r in records:
+        value = (r.get(key) or "").strip()
+        if not value or value in seen:
             continue
-        seen.add(label)
-        lines.append(f"- {r.get('date', '')}｜{label}")
+        seen.add(value)
+        lines.append(f"- {r.get('date', '')}｜{value}")
+    return lines
+
+
+def build_avoid_section(recent_ideas: list[dict], recent_posts: list[dict]) -> str:
+    """過去アイデアのテーマラベルと直近実投稿の冒頭を、重複回避用の入力に整形する。"""
+    lines = _dedup_dated_lines(recent_ideas, "theme_label")
     for p in recent_posts[-20:]:
         snippet = (p.get("content") or "").replace("\n", " ")[:50]
         if not snippet:
@@ -173,6 +209,14 @@ def build_avoid_section(recent_ideas: list[dict], recent_posts: list[dict]) -> s
         lines.append(f"- {(p.get('posted_at') or '')[:10]}｜（実投稿）{snippet}")
     if not lines:
         return "（過去アイデア・投稿の履歴なし）"
+    return "\n".join(lines)
+
+
+def build_ideal_state_section(recent_ideal_states: list[dict]) -> str:
+    """過去に提案した理想状態（設計骨格の第1層）を、重複回避用の入力に整形する。"""
+    lines = _dedup_dated_lines(recent_ideal_states, "ideal_state")
+    if not lines:
+        return "（過去に提案した理想状態の履歴なし）"
     return "\n".join(lines)
 
 
@@ -195,6 +239,7 @@ def build_prompt(
     strategy: dict,
     post_types: list[str],
     avoid_section: str,
+    ideal_state_section: str,
     hook_type_section: str,
 ) -> str:
     positioning = strategy["positioning"]
@@ -213,9 +258,10 @@ def build_prompt(
     types_section = "\n".join(type_lines)
 
     example_items = ",\n".join(
-        f'    {{ "post_type": "{t}", "priority": {i}, "theme_label": "...", "angle": "...", '
+        f'    {{ "post_type": "{t}", "priority": {i}, "theme_label": "...", '
+        f'"ideal_state": "...", "method_name": "...", "angle": "...", '
         f'"hook_candidates": [{{ "type": "型名", "text": "..." }}, {{ "type": "型名", "text": "..." }}], '
-        f'"reply_items": ["...", "..."], "follow_cta": "...", '
+        f'"reply_items": ["...", "..."], "method_caveat": "...", "follow_cta": "...", '
         f'"selection_note": "...", "reason": "..." }}'
         for i, t in enumerate(post_types, start=1)
     )
@@ -252,11 +298,32 @@ def build_prompt(
 【過去に提案したテーマ・直近の実投稿（意味的に被らせない）】
 {avoid_section}
 
+【過去に提案した理想状態（同じ願いに毎回収束させない）】
+{ideal_state_section}
+
 【テーマ選考の優先基準（この順で効かせる）】
 1. 一次感情への直結：読者が恐れる結果（夫の心が離れる／このまま自分が消える／愛されないまま年を重ねる）か、欲しい結果（自然体のまま愛される／本音を言えるようになる）に、フック1行で接続できるテーマを優先する。心理メカニズムの名前（〇〇効果・〇〇回路・〇〇誤差）が主役になるテーマは、読者にとっての結果へ翻訳できない限り採らない。メカニズムは補足リプライで支える裏付けであって、テーマの看板にはしない
 2. 夫側の実感の翻訳：「その場面で夫（男性）側が実際に何を感じているか」を1つ含められるテーマを優先する。読者が自力では手に入らない情報になり、発信者の立場でしか出せない価値になる
 3. 賛否が割れる論点：読者の常識と逆を向く主張を{IDEA_COUNT}案のうち1案には含めてよい。反対意見が付くこと自体は避けない。ただし読者を責める・見下す方向の賛否は採らない（矛先は世間の通念や夫側の鈍さに向ける）
 4. 男女どちらが読んでも成立：主たる読者は既婚女性だが、男性が読んでも「確かに自分もそうだ」と頷ける翻訳になっているテーマを優先する
+
+【投稿の設計骨格（全案共通・この骨格から外れないこと）】
+実測で伸びた投稿は例外なく次の2層で組まれている。テーマを決めたらまずこの2層を確定させ、
+hook_candidates / reply_items / method_caveat / follow_cta はすべてここから導出する。
+
+第1層 ideal_state（理想状態の言語化）{IDEAL_STATE_MIN_LEN}〜{IDEAL_STATE_MAX_LEN}字
+- ペルソナが「そうなれたら」とぼんやり思っているが、自分では言葉にできていない状態を、読者の生活語で言い切る
+- 読者が自分で言えている願い（「夫と仲良くしたい」「愛されたい」等）はここに置かない。言われて初めて「それが欲しかった」と気づく解像度まで具体化する
+- 恐れの解消形（浮気されない／心が離れない）でも獲得形（遠慮せず甘えられる）でもよい
+- 上の【過去に提案した理想状態】と意味的に被らせない。場面・行動レベルまで具体化して差を作る
+
+第2層 method_name（実現手段の名前）{METHOD_NAME_MIN_LEN}〜{METHOD_NAME_MAX_LEN}字
+- 第1層に到達する手段に、読者がまだ知らない名前をつける
+- 名前だけを出し、中身はここに書かない（中身は reply_items が持つ）
+- 発信者の一次経験・夫側の実感から出てくる手段にする。一般論の言い換えにしない
+
+検算：「[ideal_state]になる、[method_name]」と1行に畳んで日本語として成立し、
+かつ読者が中身を知りたくなるならOK。成立しないなら第1層か第2層を作り直す。
 
 【提案ルール】
 - 各案は割り当てられた投稿タイプの狙いに沿わせ、ペルソナの悩みのどれかを中心に据える
@@ -267,8 +334,9 @@ def build_prompt(
 - priority は1〜{IDEA_COUNT}を1つずつ使い、上の選考基準に最も強く合致する案を1にする（本日の推し）。順位は theme_label の good/bad ではなく「今日この1本を出すならどれか」で決める
 - theme_label は8〜18字。何の話かが一目で分かる名詞句にする
 - angle は80字以内。「どの角度から切り込み、読者に何を発見させるか」を1〜2文で書く（本文は書かない）
-- reply_items は{REPLY_ITEM_MIN}〜{REPLY_ITEM_MAX}個・各25字以内。補足リプライ1で開く要素を短い句で並べる。番号リストで出すか散文で書くかは運用者が決めるので、ここでは材料だけを粒度を揃えて出す
-- follow_cta は25〜45字。「〇〇したい人はフォローも忘れずに。」の形で、〇〇にはそのテーマ固有の読者の願い（例「夫に本音を言えるようになりたい」）を入れる。毎回同じ言い回しにせず、テーマごとに読者の自己認識ワードを変える。いいね・コメント・保存を直接要求するエンゲージメントベイトにはせず、フォロー導線に限る。体系化系（structure）は3投稿目に「続きはnoteに書く」型のフォロー誘導を置く運用があるので、その場合はこの follow_cta と重ねず、どちらか一方だけを使う（運用者が選ぶ前提で、案としては常に出す）
+- reply_items は{REPLY_ITEM_MIN}〜{REPLY_ITEM_MAX}個・各25字以内。method_name の中身、つまり読者が今日から実行できる行動を並べる。観察・洞察・原因説明はここに入れない（それは angle の仕事）。各項目は動詞で終える（○「帰宅直後の表情を読むのをやめる」／×「夫は表情を読まれると身構える」）。番号リストで出すか散文で書くかは運用者が決めるので、ここでは行動だけを粒度を揃えて出す
+- method_caveat は{METHOD_CAVEAT_MIN_LEN}〜{METHOD_CAVEAT_MAX_LEN}字。reply_items を効かせるための条件を1つだけ添える。順番の指定（「①をやってから」）／前提の否定（「冷たくするのとは違う」）／添える態度（「ただし感謝は必ず伝える」）のいずれかにする。一般的な注意書き（「無理はしないで」「人によります」等）は書かない
+- follow_cta は25〜45字。「〇〇したい人はフォローも忘れずに。」の形で、〇〇には ideal_state を読者の一人称の願いに言い換えたものを入れる（ideal_state と語彙をずらさない）。毎回同じ言い回しにせず、案ごとに読者の自己認識ワードを変える。いいね・コメント・保存を直接要求するエンゲージメントベイトにはせず、フォロー導線に限る。体系化系（structure）は3投稿目に「続きはnoteに書く」型のフォロー誘導を置く運用があるので、その場合はこの follow_cta と重ねず、どちらか一方だけを使う（運用者が選ぶ前提で、案としては常に出す）
 - selection_note は{SELECTION_NOTE_MAX_LEN}字以内。上の選考基準1〜4のどれで読者を引っかける案なのかを明示する（例「基準1（恐れ）＋基準2で組んだ案」）
 - reason は{REASON_MAX_LEN}字以内（厳守・超過禁止）。「なぜ今のペルソナに刺さるか／なぜ他の切り口より優先したいか」を1〜2文で書く
 
@@ -276,6 +344,7 @@ def build_prompt(
 {hook_type_section}
 
 【hook_candidates の作り方】
+- {HOOK_PER_IDEA}案とも ideal_state と method_name から作る（フックは設計骨格をルート1行に落としたもの）。ベネフィット直球型は骨格をそのまま1行に畳む型なので最も素直だが、どの型を選んでも骨格から外れないこと
 - 各案につき{HOOK_PER_IDEA}案、必ず異なる型で出す。type にはカタログの型名（例「ベネフィット直球型」）をそのまま書く
 - {IDEA_COUNT}案全体で同じ型に寄せない。直近の使用回数が多い型は避け、使用が少ない型を優先的に当てる
 - 型の指定字数を守る。読者が1行目だけを見て「自分の話だ」と分かる具体語（夫・妻・浮気・本音・我慢・機嫌など読者の生活語）を必ず1つ以上入れる
@@ -349,6 +418,17 @@ def _clean_reply_items(index: int, raw_items) -> list[str]:
     return items
 
 
+def _warn_out_of_range(index: int, field: str, value: str, min_len: int, max_len: int) -> None:
+    """設計骨格まわりの字数が想定レンジ外なら警告のみ出す。
+    切り詰め・再生成はしない（そのまま使えるかは運用者が判断する）。"""
+    if not (min_len <= len(value) <= max_len):
+        print(
+            f"[generate_post_ideas] 警告: ideas[{index}] の {field} が {len(value)} 字"
+            f"（想定={min_len}〜{max_len}字）。そのまま出力します。",
+            flush=True,
+        )
+
+
 def _resolve_priorities(cleaned: list[dict]) -> None:
     """priority が 1..N の順列になっているか検証し、崩れていれば割り当て順で振り直す。
     順位は運用者が見る参考値なので、崩れても停止はしない。"""
@@ -369,16 +449,19 @@ def propose_ideas(
     strategy: dict,
     post_types: list[str],
     avoid_section: str,
+    ideal_state_section: str,
     hook_type_section: str,
 ) -> list[dict]:
     """本日の投稿アイデアを Claude API に提案させる。Claude 呼び出しは1回のみ。
     生成失敗時は IdeaGenerationError を送出する（呼び出し側で Slack 通知＋停止）。"""
-    prompt = build_prompt(strategy, post_types, avoid_section, hook_type_section)
+    prompt = build_prompt(strategy, post_types, avoid_section, ideal_state_section, hook_type_section)
 
     try:
         message = client.messages.create(
             model="claude-opus-5",
-            max_tokens=4500,
+            # 設計骨格の3フィールド追加分（1案あたり約65字）を見込んで 4500 から引き上げ。
+            # 上限なので未使用分は課金されない。切れると JSON パース失敗＝生成停止になる。
+            max_tokens=5000,
             thinking={"type": "disabled"},
             output_config={"effort": "high"},
             messages=[{"role": "user", "content": prompt}],
@@ -415,11 +498,26 @@ def propose_ideas(
         reason = (item.get("reason") or "").strip()
         follow_cta = (item.get("follow_cta") or "").strip()
         selection_note = (item.get("selection_note") or "").strip()
+        # 設計骨格の2層＋効かせる条件。フックもリプライもCTAもここから導出させているので、
+        # 欠落は案そのものが骨格から外れた状態を意味する。致命扱いにする。
+        ideal_state = (item.get("ideal_state") or "").strip()
+        method_name = (item.get("method_name") or "").strip()
+        method_caveat = (item.get("method_caveat") or "").strip()
         if not (theme_label and angle and reason and follow_cta and selection_note):
             raise IdeaGenerationError(
                 f"ideas[{i}] に theme_label / angle / reason / follow_cta / selection_note の"
                 f"いずれかが欠落: {item}"
             )
+        if not (ideal_state and method_name and method_caveat):
+            raise IdeaGenerationError(
+                f"ideas[{i}] に ideal_state / method_name / method_caveat の"
+                f"いずれかが欠落（設計骨格が成立していない）: {item}"
+            )
+        _warn_out_of_range(i, "ideal_state", ideal_state, IDEAL_STATE_MIN_LEN, IDEAL_STATE_MAX_LEN)
+        _warn_out_of_range(i, "method_name", method_name, METHOD_NAME_MIN_LEN, METHOD_NAME_MAX_LEN)
+        _warn_out_of_range(
+            i, "method_caveat", method_caveat, METHOD_CAVEAT_MIN_LEN, METHOD_CAVEAT_MAX_LEN
+        )
         hooks = _clean_hook_candidates(i, item.get("hook_candidates"))
         reply_items = _clean_reply_items(i, item.get("reply_items"))
         returned_type = (item.get("post_type") or "").strip()
@@ -440,9 +538,12 @@ def propose_ideas(
             "post_type": assigned_type,
             "priority": item.get("priority"),
             "theme_label": theme_label,
+            "ideal_state": ideal_state,
+            "method_name": method_name,
             "angle": angle,
             "hook_candidates": hooks,
             "reply_items": reply_items,
+            "method_caveat": method_caveat,
             "follow_cta": follow_cta,
             "selection_note": selection_note,
             "reason": reason,
@@ -455,8 +556,9 @@ def propose_ideas(
 def save_ideas_md(ideas: list[dict], strategy: dict, date_str: str) -> str:
     """アイデア提案をMarkdownとして保存し、ファイルパスを返す。
 
-    読み戻しに使う行が2種類あるので、書式を変えるときは正規表現も揃えること:
+    読み戻しに使う行が3種類あるので、書式を変えるときは正規表現も揃えること:
       - 見出し `## 提案N: テーマラベル` → _IDEA_HEADING_RE（テーマ重複回避）
+      - 理想状態行 `- **理想状態**: ...` → _IDEAL_STATE_RE（理想状態の収束回避）
       - フック候補行 `  1. （型名）本文` → _HOOK_TYPE_RE（フック型の偏り回避）
     案は割り当て順（＝投稿タイプのローテーション順）に並べ、推し順は優先度欄で示す。
     """
@@ -475,6 +577,8 @@ def save_ideas_md(ideas: list[dict], strategy: dict, date_str: str) -> str:
         lines.append("")
         lines.append(f"- **投稿タイプ**: {label}（{post_type}）")
         lines.append(f"- **優先度**: {priority_label}")
+        lines.append(f"- **理想状態**: {idea['ideal_state']}")
+        lines.append(f"- **手段の名前**: {idea['method_name']}")
         lines.append(f"- **切り口**: {idea['angle']}")
         lines.append("- **フック候補**:")
         for j, hook in enumerate(idea["hook_candidates"], start=1):
@@ -482,6 +586,7 @@ def save_ideas_md(ideas: list[dict], strategy: dict, date_str: str) -> str:
         lines.append("- **補足リプライ1の要素**:")
         for item in idea["reply_items"]:
             lines.append(f"  - {item}")
+        lines.append(f"- **効かせる条件**: {idea['method_caveat']}")
         lines.append(f"- **フォロー誘導CTA**: {idea['follow_cta']}")
         lines.append(f"- **選考メモ**: {idea['selection_note']}")
         lines.append(f"- **狙い・根拠（{len(reason)}文字）**: {reason}")
@@ -502,20 +607,24 @@ def main():
     print(f"[generate_post_ideas] 本日の投稿タイプ割り当て: {post_types}")
 
     recent_ideas = load_recent_idea_labels()
+    recent_ideal_states = load_recent_ideal_states()
     recent_posts = load_recent_posts()
     hook_type_counts = load_recent_hook_type_counts()
     print(
         f"[generate_post_ideas] 重複回避入力: 過去アイデア {len(recent_ideas)}件 / "
-        f"直近投稿 {len(recent_posts)}件"
+        f"過去の理想状態 {len(recent_ideal_states)}件 / 直近投稿 {len(recent_posts)}件"
     )
     print(f"[generate_post_ideas] 直近{RECENT_HOOK_TYPE_DAYS}日のフック型使用回数: {hook_type_counts or 'なし'}")
     avoid_section = build_avoid_section(recent_ideas, recent_posts)
+    ideal_state_section = build_ideal_state_section(recent_ideal_states)
     hook_type_section = build_hook_type_section(hook_type_counts)
 
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
 
     try:
-        ideas = propose_ideas(client, strategy, post_types, avoid_section, hook_type_section)
+        ideas = propose_ideas(
+            client, strategy, post_types, avoid_section, ideal_state_section, hook_type_section
+        )
     except IdeaGenerationError as e:
         print(f"[generate_post_ideas] アイデア提案生成に失敗: {e}", flush=True)
         notify_slack_post_ideas_failure(stage=f"{IDEA_COUNT}案提案生成", error=str(e))
