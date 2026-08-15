@@ -143,15 +143,28 @@ gspread は数値IDを科学表記に暗黙変換するため、`sheets._normali
 ### 重複投稿防止（Claude 非依存）
 `generate_post.py` は生成後に `_jaccard_trigram_similarity`（文字トライグラム Jaccard 類似度）を計算し、同 post_type の直近14日投稿と比べて `SIMILARITY_THRESHOLD = 0.25` 以上なら `notify_slack_duplicate_warning` で警告する。**投稿自体は既に完了済みで自動削除はしない**—運用者が手動削除する前提。Claude API 消費を避けるため類似判定はローカル計算で完結させる設計なので、ここに LLM を差し込まない。
 
-### note 生成パイプラインは別系統（ネタ出し専用）
+### note は単発2本モデル（現行・2026-08-13〜）
+無料note 1本・有料note 1本を**単発で作り、そこにスキと購入を集中させる**運用に切り替えた。設計の正本は `docs/note_two_asset_design.md`。要点だけ:
+
+- **無料note = 証明装置（KPIはスキ数）／有料note = 収益装置**。note は購入数を公開表示しないため、可視の社会的証明は無料note のスキ数でしか作れない
+- テーマ軸は **「本音を言えなくなってきたこと」**。`persona.pain_points` #2 かつ `midend_product.title` と直結しており、有料note がそのままミドルエンドの実体になる
+- 貫く理想状態は「夫に本音を言った翌朝も、いつも通りの空気でいられる」。ピン留め（`docs/pinned_post_proposals.md` 案A）→ 日々のThreads → 無料note → 有料note を**同じ語彙で貫く**
+- 無料note の構成は「**理想状態の詳細描写 → 落とし穴 → 手段の名前 → ブリッジ**」の順（`note_writing_guide.json:free_mode_principles.structure_template_override`）。**手段より先に落とし穴を置く順序が設計の核心**で、逆にすると「読んで満足」で閉じられる。並べ替えないこと
+- ここでの「落とし穴」は**読者が自己流でやろうとしてすでにハマっている場所**であって、「手段を実行した人の失敗」ではない（手段より前に置く構成のため）
+- **日次生成（`generate_note.py` / `note_generate.yml`）は再開しない。`note_analyze.yml` も同様。`post_note_promo.py` / `note_promo.yml` も再開しない**（再開する場合、`post_note_promo.py` は当日ファイル＋当日DB行を見る日付結合のままなので、固定note参照への変更が前提。そのままだと常設1本モデルでは毎回スキップ通知が飛ぶ）
+- 2026-08-13 に `note_writing_guide.json` から**連載前提の仕組みを削除**した（`pattern_distribution` / `combination_patterns` / `paid_mode_overrides` / `recommended_frequency` / 有料要素の「心理学・脳科学の根拠」）。削除の経緯と理由は `docs/note_two_asset_design.md` §7。**単発運用を続ける限り復活させない**
+
+### note 生成パイプラインは別系統（ネタ出し専用・停止中）
 `generate_note.py` は **本文を書かず、当日の note 記事テーマを 3 つ提案する**だけのスクリプト。出力は各テーマごとに `theme_label` / `title_candidate` / `reason`（200字以内・ペルソナの爬虫類脳/哺乳類脳に刺さる根拠）/ `target_brain`（reptilian / mammalian / both）。Claude API 呼び出しは 1 回のみで、過去テーマ（`note投稿DB.theme_label`）と意味的に被らないことだけを制約として渡す。
 - 生成結果は `output/notes/YYYY-MM-DD_{free|paid}.md` に「## 提案1〜3」のフォーマットで書き出し、ワークフローが `git commit && git push` する（`note_generate.yml` 参照）。
 - 同時に **note投稿DB に 3 行を `status='proposed'` で append**（同じ `generated_at` / `file_path` で 3 行・各 `title` は `title_candidate`、`theme_label` / `theme_description`(=reason) を埋める。`combination_pattern` / `*_type` / `ref_threads_post_ids` / `selling_element_ids` / `selected_*` 列は空欄）。運用者は 1 つを選んで note.com 用本文を別途作成し、投稿後に `url` / `status='posted'` を手動更新する。
 - `analyze_note_performance.py` は同様に `output/reports/YYYY-MM-DD_note_analysis.md` をコミット。
 - Slack 通知（`notify_slack_note`）は代表タイトル（先頭テーマ）+ GitHub blob URL のみで、本文・他2案は載せない（トークン節約＋詳細は GitHub view で確認）。
-- 本文生成・組み合わせパターン選択・writing_guide 注入・selling_elements・angle_combo は **このスクリプトからは廃止済み**。`config/note_writing_guide.json` は現行 `generate_note.py` からは参照されないが、**運用者または Claude がこのリポジトリ内で note 記事本文を作成・編集するとき（提案された 3 テーマから 1 つ選んで note.com 用本文を書く工程）は必ずこのファイルを参照すること**（タイトル型 / 冒頭フック型 / 課題提示型 / 解決法型 / 高エンゲージメント実証パターン / Threads→note 引き継ぎ設計 / 有料note の売れる要素チェックリスト / `engagement_design_rules` に集約されている `inner_pattern_phrasing_rule`〔`思考・行動のクセ` を `あなたの／自分の` 付きで使う〕／ `negation_assertion_pattern_limit`〔『〇〇ではなく〇〇です』型レトリックの上限2箇所＋分散レトリック列挙〕／ `research_citation_rule`〔本文に出典情報を織り込まず `（※N）` 脚注マーカー＋記事末 `## 参考文献` セクションで管理〕 が集約されている）。将来的に本文生成を再開する可能性も考えてファイル自体は残置している。
+- 本文生成・組み合わせパターン選択・writing_guide 注入・selling_elements・angle_combo は **このスクリプトからは廃止済み**。`config/note_writing_guide.json` は現行 `generate_note.py` からは参照されないが、**運用者または Claude がこのリポジトリ内で note 記事本文を作成・編集するとき（現行は上記の単発2本モデルで note.com 用本文を書く工程）は必ずこのファイルを参照すること**（タイトル型 / 冒頭フック型 / 課題提示型 / 解決法型 / 高エンゲージメント実証パターン / Threads→note 引き継ぎ設計 / 有料note の売れる要素チェックリスト / `engagement_design_rules` に集約されている `inner_pattern_phrasing_rule`〔`思考・行動のクセ` を `あなたの／自分の` 付きで使う〕／ `negation_assertion_pattern_limit`〔『〇〇ではなく〇〇です』型レトリックの上限2箇所＋分散レトリック列挙〕／ `research_citation_rule`〔本文に出典情報を織り込まず `（※N）` 脚注マーカー＋記事末 `## 参考文献` セクションで管理〕 が集約されている）。将来的に本文生成を再開する可能性も考えてファイル自体は残置している。
 
-### note誘導Threads配信（3日に1回 20:00 JST）
+### note誘導Threads配信（3日に1回 20:00 JST・停止中／再開しない）
+> 2026-08-13 の単発2本モデル移行に伴い**再開しない**方針。再開する場合は下記の日付結合を固定note参照へ変更するのが前提（`docs/note_two_asset_design.md` §8）。以下は停止時点の仕様。
+
 `scripts/post_note_promo.py` は当日の `output/notes/YYYY-MM-DD_free.md` を読み、note記事を読みたくさせる「フック本文＋補足リプライ1＋URL単独リプライ2」の3投稿構成スレッドを配信する。
 - 配信頻度は **3日に1回**。cron は毎日 20:00 JST に起動するが、スクリプト先頭で `date.toordinal() % 3 != 0` の日はSlack通知なしで即終了する。`*/3` 系cronだと月末で間隔が崩れる（例: 31日→翌月1日が1日間隔）ため、通日ordinal剰余で常に3日固定間隔を維持する設計。頻度を変える場合はスクリプトの剰余条件を編集する。
 - URLは Claude を通さず、note投稿DB の **`url` 列**（手動入力、generated_at 当日かつ type=free の行）から取得する（`sheets.get_note_url_by_date`）。
