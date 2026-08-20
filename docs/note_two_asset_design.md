@@ -170,6 +170,8 @@
 
 ## 関連ファイル
 
+- **無料note 本文: `output/notes/free_note.md`**（2026-08-13 執筆済み）
+- **有料note 本文: `output/notes/paid_note.md`**（2026-08-13 執筆済み。有料ラインの位置は本文中のマーカー行）
 - 本文執筆ルールの正本: `config/note_writing_guide.json`
 - ポジショニング・ペルソナ・商品ラダー: `config/strategy.json`
 - Threads 側の設計骨格: `scripts/generate_post_ideas.py` の【投稿の設計骨格】
