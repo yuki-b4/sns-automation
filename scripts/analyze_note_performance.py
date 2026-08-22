@@ -219,7 +219,7 @@ def build_analysis_prompt(records: list[dict], article_contents: dict, threads_s
 - テーマ × target_brain の試行案を 2〜3 件
 
 ## 6. 手書きnote本文ルールへの追加提案（自由記述）
-- このセクションは `note_writing_guide.json` の構造変更や `pattern_distribution` / `free_mode_weekly_caps` 等の**数値・キー変更を提案しない**（運用者がnote本文を手書きするときの参考に対する**追記案**のみ）
+- このセクションは `note_writing_guide.json` の構造変更や既存キーの**数値・キー変更を提案しない**（運用者がnote本文を手書きするときの参考に対する**追記案**のみ）
 - 例: 冒頭の引用ブロック設計／タイトル型の使い分け／Before-After の組立方／読了後アクション設計 など、運用者の執筆判断に直接役立つ短い気づきを 2〜4 件、箇条書きで
 - 既存ルール（`high_performance_patterns` / `title_anti_patterns` / `engagement_design_rules` / `title_rules`）と概念が重複する場合は提案しない
 """
