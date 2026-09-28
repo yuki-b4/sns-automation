@@ -283,8 +283,9 @@ def generate_post(post_type: str, strategy: dict, recent_posts: list[dict] | Non
 
     # Threads用コンテンツ生成
     # structure は3投稿構成のため adaptive thinking を ON にし、思考トークンが本文を
-    # 圧迫しないよう max_tokens を 4096 に拡張する。他タイプは thinking OFF（disabled）。
-    # effort は output_config で high を明示（disabled は effort high 以下でのみ許可。
+    # 圧迫しないよう max_tokens を 4096 に拡張する。他タイプは thinking OFF（between_tools）。
+    # Sonnet 5.5 は {"type": "disabled"} が 400 になるため、最低設定の between_tools で OFF にする。
+    # effort は output_config で high を明示（between_tools は effort high 以下でのみ許可。
     # xhigh / max と組み合わせると 400 になる）。
     threads_prompt = build_prompt(strategy, post_type, recent_posts)
     if post_type == "structure":
@@ -292,15 +293,15 @@ def generate_post(post_type: str, strategy: dict, recent_posts: list[dict] | Non
         thinking = {"type": "adaptive"}
     else:
         max_tokens = 768
-        thinking = {"type": "disabled"}
+        thinking = {"type": "between_tools"}
     threads_message = client.messages.create(
-        model="claude-opus-5",
+        model="claude-sonnet-5-5",
         max_tokens=max_tokens,
         thinking=thinking,
         output_config={"effort": "high"},
         messages=[{"role": "user", "content": threads_prompt}],
     )
-    log_token_cost("claude-opus-5", threads_message.usage, "generate_post")
+    log_token_cost("claude-sonnet-5-5", threads_message.usage, "generate_post")
     # thinking ON のとき content 先頭が thinking ブロックになり得るため text ブロックを明示抽出
     threads_text = next((b.text for b in threads_message.content if b.type == "text"), "")
     threads_result = _parse_post(threads_text.strip())

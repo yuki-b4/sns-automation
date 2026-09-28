@@ -137,13 +137,13 @@ def generate_report(strategy: dict, own_summary: str, competitor_summary: str, p
 - 文字数が余る場合は各項目の分析を深めること、超える場合は具体例を削減して調整すること（項目や論点は省かないこと）"""
 
     message = client.messages.create(
-        model="claude-opus-5",
+        model="claude-sonnet-5-5",
         max_tokens=2048,
-        thinking={"type": "disabled"},
+        thinking={"type": "between_tools"},
         output_config={"effort": "high"},
         messages=[{"role": "user", "content": prompt}],
     )
-    log_token_cost("claude-opus-5", message.usage, "weekly_report")
+    log_token_cost("claude-sonnet-5-5", message.usage, "weekly_report")
     # thinking ON のとき content 先頭が thinking ブロックになり得るため text ブロックを明示抽出
     return next((b.text for b in message.content if b.type == "text"), "").strip()
 
