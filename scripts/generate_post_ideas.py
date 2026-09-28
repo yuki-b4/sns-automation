@@ -465,18 +465,18 @@ def propose_ideas(
 
     try:
         message = client.messages.create(
-            model="claude-opus-5",
+            model="claude-sonnet-5-5",
             # 設計骨格の3フィールド追加分（1案あたり約65字）を見込んで 4500 から引き上げ。
             # 上限なので未使用分は課金されない。切れると JSON パース失敗＝生成停止になる。
             max_tokens=5000,
-            thinking={"type": "disabled"},
+            thinking={"type": "between_tools"},
             output_config={"effort": "high"},
             messages=[{"role": "user", "content": prompt}],
         )
     except Exception as e:
         raise IdeaGenerationError(f"Claude API呼び出しに失敗: {type(e).__name__}: {e}") from e
 
-    log_token_cost("claude-opus-5", message.usage, "generate_post_ideas")
+    log_token_cost("claude-sonnet-5-5", message.usage, "generate_post_ideas")
     # thinking ON のとき content 先頭が thinking ブロックになり得るため text ブロックを明示抽出
     raw = next((b.text for b in message.content if b.type == "text"), "").strip()
     # ```json などのフェンス除去

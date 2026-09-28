@@ -125,15 +125,15 @@ def _generate_hook(strategy: dict, note_markdown: str) -> dict:
     client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
     prompt = _build_prompt(strategy, note_markdown)
     message = client.messages.create(
-        model="claude-opus-5",
+        model="claude-sonnet-5-5",
         # 旧 600（Opus 4.6 基準）。Opus 4.7 以降はトークナイザが変わり同じ本文でも
         # 最大1.35倍のトークン数になるため、余裕を見て 900 とする。
         max_tokens=900,
-        thinking={"type": "disabled"},
+        thinking={"type": "between_tools"},
         output_config={"effort": "high"},
         messages=[{"role": "user", "content": prompt}],
     )
-    log_token_cost("claude-opus-5", message.usage, "post_note_promo")
+    log_token_cost("claude-sonnet-5-5", message.usage, "post_note_promo")
     # thinking ON のとき content 先頭が thinking ブロックになり得るため text ブロックを明示抽出
     return _parse(next((b.text for b in message.content if b.type == "text"), "").strip())
 
